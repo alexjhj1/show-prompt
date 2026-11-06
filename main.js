@@ -58,7 +58,7 @@
   // ---- 저장 (이 브라우저에만) ----
   const KEY='standup-prompter-v2', OLD='standup-prompter-v1';
   // 기본값을 바꾸면 이 번호를 올린다. 예전 기본값으로 저장된 속도·크기는 새 기본값으로 시작한다
-  const DEFAULTS=2;
+  const DEFAULTS=3;
   function save(){
     try{localStorage.setItem(KEY,JSON.stringify({h:render(readLines(src)),v:speedEl.value,z:size.value,n:DEFAULTS}))}catch(e){}
   }
@@ -76,7 +76,7 @@
   }
   try{
     const d=JSON.parse(localStorage.getItem(KEY)||'null');
-    if(d){src.innerHTML=d.h||'';src.innerHTML=render(readLines(src));if(d.n===DEFAULTS){speedEl.value=d.v;size.value=d.z;}}
+    if(d){src.innerHTML=d.h||'';src.innerHTML=render(readLines(src));if(d.n>=2)size.value=d.z;if(d.n===DEFAULTS)speedEl.value=d.v;}
     else{
       // 이전 버전에 저장한 대본 가져오기
       const o=JSON.parse(localStorage.getItem(OLD)||'null');
@@ -125,10 +125,11 @@
   // ---- 재생 ----
   let y=0, playing=false, last=0, raf=0, distance=0, toastTimer=0;
 
-  // 속도 숫자는 대략 초당 글자 수라서 글자 크기를 바꿔도 읽는 빠르기가 비슷하다
+  // 속도 1~10: 한 단계마다 약 1.36배씩 빨라져 1은 초당 0.5줄, 10은 초당 8줄이다
+  // 줄 수 기준이라 글자 크기를 바꿔도 줄이 지나가는 빠르기는 같다
   function pxPerSec(){
-    const z=+size.value;
-    return +speedEl.value*1.45*z*z/(window.innerWidth*0.88);
+    const linesPerSec=0.5*Math.pow(16,(+speedEl.value-1)/9);
+    return linesPerSec*1.8*(+size.value); // 한 줄 높이 = 줄 간격 1.45 + 줄 사이 .35
   }
   function layout(){
     const vh=window.innerHeight, top=Math.round(vh*0.33);
@@ -176,7 +177,7 @@
   };
   function close(){pause();stage.classList.remove('on');document.body.style.overflow='';}
   const hud=$('hud');
-  [['backBtn',close],['slowBtn',()=>changeSpeed(-0.5)],['playBtn',toggle],['fastBtn',()=>changeSpeed(0.5)]].forEach(([id,fn])=>{
+  [['backBtn',close],['slowBtn',()=>changeSpeed(-1)],['playBtn',toggle],['fastBtn',()=>changeSpeed(1)]].forEach(([id,fn])=>{
     $(id).addEventListener('click',e=>{e.stopPropagation();fn();});
   });
   hud.addEventListener('click',e=>e.stopPropagation());
@@ -207,8 +208,8 @@
   document.addEventListener('keydown',e=>{
     if(!stage.classList.contains('on'))return;
     if(e.code==='Space'){e.preventDefault();toggle();}
-    if(e.key==='ArrowUp')changeSpeed(0.5);
-    if(e.key==='ArrowDown')changeSpeed(-0.5);
+    if(e.key==='ArrowUp')changeSpeed(1);
+    if(e.key==='ArrowDown')changeSpeed(-1);
     if(e.key==='Escape')close();
   });
   window.addEventListener('resize',()=>{if(stage.classList.contains('on'))layout();});
