@@ -131,12 +131,23 @@
   opts.addEventListener('touchmove',e=>{if(e.target.type!=='range')e.preventDefault();},{passive:false});
   // 옵션을 누르면 키보드를 내린다
   opts.addEventListener('touchstart',()=>{if(document.activeElement===src)src.blur();},{passive:true});
-  // 키보드가 올라오면 화면 높이를 맞춰서 대본 칸이 가려지지 않게 한다
+  // 화면 높이 맞추기
+  // 홈 화면 앱에서는 브라우저가 알려 주는 높이가 상태 표시줄만큼 모자라서 기기 화면 높이를 쓴다
+  // 키보드가 올라오면 그만큼 빼서 대본 칸이 가려지지 않게 한다
   const vv=window.visualViewport;
-  if(vv){
-    const fit=()=>{document.documentElement.style.setProperty('--vh',vv.height+'px');window.scrollTo(0,0);};
-    vv.addEventListener('resize',fit);fit();
+  let baseH=0, baseW=0;
+  function fit(){
+    const h=vv?vv.height:window.innerHeight, w=window.innerWidth;
+    if(w!==baseW){baseW=w;baseH=h;}
+    baseH=Math.max(baseH,h);
+    const landscape=w>h&&w>baseH;
+    const full=navigator.standalone?(landscape?screen.width:screen.height):baseH;
+    document.documentElement.style.setProperty('--vh',(full-(baseH-h))+'px');
+    window.scrollTo(0,0);
+    if(stage.classList.contains('on'))layout();
   }
+  if(vv)vv.addEventListener('resize',fit);
+  window.addEventListener('resize',fit);
   $('clearBtn').onclick=()=>{src.innerHTML='';refresh();save();src.focus();};
 
   // ---- 재생 ----
@@ -155,7 +166,7 @@
     return 0.9*Math.pow(16,(+speedEl.value-1)/9)*(+size.value);
   }
   function layout(){
-    const vh=window.innerHeight, top=Math.round(vh*0.33);
+    const vh=stage.clientHeight, top=Math.round(vh*0.33);
     scroller.style.fontSize=size.value+'px';
     scroller.style.paddingTop=top+'px';
     scroller.style.paddingBottom=(vh-top)+'px';
@@ -229,5 +240,5 @@
     if(e.key==='ArrowDown')changeSpeed(-1);
     if(e.key==='Escape')close();
   });
-  window.addEventListener('resize',()=>{if(stage.classList.contains('on'))layout();});
+  fit();
 })();
