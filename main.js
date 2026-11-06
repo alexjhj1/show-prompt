@@ -1,4 +1,4 @@
-// 스탠드업 프롬프터: 잽·펀치·킬링 색칠 + 속도 조절 자동 스크롤
+// 스탠드업 프롬프터: 잽·펀치 표시 + 속도 조절 자동 스크롤
 (function(){
   const $ = id => document.getElementById(id);
   const src=$('src'), speedEl=$('speed'), speedV=$('speedV'), size=$('size'), sizeV=$('sizeV');
@@ -50,7 +50,7 @@
     return lines;
   }
   // 입력 칸과 재생 화면이 같은 모양을 쓴다
-  // 볼드만 = 잽(색 없음), 밑줄만 = 펀치(노랑), 볼드+밑줄 = 킬링(빨강), 괄호 글씨 = 진한 회색
+  // 볼드 = 잽(색 없음), 밑줄 = 펀치(노랑), 둘 다 있으면 펀치, 괄호 글씨 = 진한 회색
   // 붙여넣은 글자색·크기는 버리고 줄과 볼드·밑줄만 남긴다
   function paint(t){return esc(t).replace(/(\([^)]*\)|（[^）]*）)/g,'<span class="pause">$1</span>');}
   function render(lines){
@@ -75,9 +75,9 @@
     const chars=lineText.reduce((n,t)=>n+t.replace(/\([^)]*\)|（[^）]*）/g,'').replace(/\s/g,'').length,0);
     // 표시된 한 덩어리를 하나로 센다
     const count=f=>lines.reduce((n,l)=>n+l.filter(r=>f(r)&&r.t.trim()).length,0);
-    const jab=count(r=>r.b&&!r.u), punch=count(r=>!r.b&&r.u), kill=count(r=>r.b&&r.u);
+    const jab=count(r=>r.b&&!r.u), punch=count(r=>r.u);
     src.classList.toggle('empty',!hasText);
-    $('stat').innerHTML=hasText?`${chars.toLocaleString()}자 · 잽 ${jab} · <span class="y">펀치 ${punch}</span> · <span class="r">킬링 ${kill}</span>`:'';
+    $('stat').innerHTML=hasText?`${chars.toLocaleString()}자 · 잽 ${jab} · <span class="y">펀치 ${punch}</span>`:'';
     speedV.textContent=speedEl.value;
     sizeV.textContent=size.value;
     // 글자 크기 바를 움직이면 입력 칸이 바로 같은 크기로 바뀐다
