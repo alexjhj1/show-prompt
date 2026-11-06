@@ -122,19 +122,50 @@
   refresh();
 
   src.addEventListener('input',()=>{refresh();save();});
-  src.addEventListener('paste',()=>{
-    // 브라우저가 서식째 붙여넣은 뒤에 읽어서 볼드체를 놓치지 않는다
-    setTimeout(()=>{
-      src.innerHTML=render(readLines(src));
-      refresh();save();
-      // 붙여넣은 뒤에는 고칠 일이 없으니 키보드를 내리고 첫 줄로 돌아간다
-      getSelection().removeAllRanges();
-      src.blur();
-      src.scrollTop=0;
-      // 키보드가 내려가는 동안 화면이 다시 움직여도 첫 줄에 머물게 한다
-      setTimeout(()=>{src.scrollTop=0;},350);
-    },0);
-  });
+  function afterPaste(){
+    src.innerHTML=render(readLines(src));
+    refresh();save();
+    // 붙여넣은 뒤에는 고칠 일이 없으니 키보드를 내리고 첫 줄로 돌아간다
+    getSelection().removeAllRanges();
+    src.blur();
+    src.scrollTop=0;
+    // 키보드가 내려가는 동안 화면이 다시 움직여도 첫 줄에 머물게 한다
+    setTimeout(()=>{src.scrollTop=0;},350);
+  }
+  // 브라우저가 서식째 붙여넣은 뒤에 읽어서 볼드체를 놓치지 않는다
+  src.addEventListener('paste',()=>setTimeout(afterPaste,0));
+
+  // ---- 붙여넣기 버튼: 복사해 둔 글로 대본을 통째로 바꾼다 ----
+  // 복사한 서식에서 볼드·밑줄 판단에 필요 없는 위험한 요소를 뺀다
+  function cleanHTML(html){
+    const d=new DOMParser().parseFromString(html,'text/html');
+    d.querySelectorAll('script,img,iframe,object,embed,link').forEach(e=>e.remove());
+    d.querySelectorAll('*').forEach(e=>[...e.attributes].forEach(a=>{if(/^on/i.test(a.name))e.removeAttribute(a.name);}));
+    return [...d.head.querySelectorAll('style')].map(s=>s.outerHTML).join('')+d.body.innerHTML;
+  }
+  async function pasteFromClipboard(){
+    const cb=navigator.clipboard;
+    if(!cb||!(cb.read||cb.readText)){src.focus();return;}
+    try{
+      let html='', text='';
+      if(cb.read){
+        for(const item of await cb.read()){
+          if(item.types.includes('text/html'))html=await (await item.getType('text/html')).text();
+          else if(item.types.includes('text/plain'))text=await (await item.getType('text/plain')).text();
+          if(html||text)break;
+        }
+      }else text=await cb.readText();
+      const box=document.createElement('div');
+      box.innerHTML=html?cleanHTML(html):'';
+      if(!box.textContent.trim()&&!text.trim()){$('stat').textContent='복사한 글이 없어요';return;}
+      if(html)src.innerHTML=box.innerHTML; else src.textContent=text;
+      afterPaste();
+    }catch(e){
+      // 아이폰의 붙여넣기 말풍선을 그냥 닫으면 아무것도 하지 않는다
+      if(e.name!=='NotAllowedError')src.focus();
+    }
+  }
+  $('pasteBtn').onclick=pasteFromClipboard;
   // 직접 고친 내용도 입력을 마치면 괄호 색칠을 다시 입힌다
   src.addEventListener('blur',()=>{
     const h=render(readLines(src));
