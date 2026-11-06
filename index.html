@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>스탠드업 프롬프터</title>
+<!-- 아이폰 홈 화면에 추가했을 때 앱처럼 열리게 하는 설정 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="프롬프터">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0e0e10">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section id="setup">
+  <h1>🎤 스탠드업 프롬프터</h1>
+  <p class="sub">아이폰 메모에서 대본을 복사해 아래 칸을 길게 눌러 붙여넣으세요.</p>
+
+  <textarea id="src" placeholder="##오프닝
+안녕하세요, 저는 40년째 캥거루족입니다.
+(쉼)
+!!엄마가 저를 아직 못 내보냈어요.!!
+
+##분당 이야기
+분당 끝자락에 살아요.
+광주랑 경계라서 ..."></textarea>
+  <div class="row">
+    <button class="btn" id="clearBtn">지우기</button>
+    <span class="stat" id="stat"></span>
+  </div>
+
+  <div class="card">
+    <h2>공연 시간 (이 시간에 맞춰 끝까지 올라가요)</h2>
+    <div class="row" style="margin-top:0">
+      <label><input type="number" id="min" min="0" max="60" value="5"> 분</label>
+      <label><input type="number" id="sec" min="0" max="59" value="0"> 초</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>화면</h2>
+    <div class="row" style="margin-top:0">
+      <label style="flex:1">글자 크기 <input type="range" id="size" min="22" max="72" value="38"> <span id="sizeV" class="stat">38</span></label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="auto" checked> 자동 색칠 (코너 첫 줄 노랑 · 마지막 줄 빨강)</label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="countdown" checked> 3초 카운트다운</label>
+      <label><input type="checkbox" id="mirror"> 좌우 반전 (프롬프터 거울용)</label>
+    </div>
+  </div>
+
+  <div class="card legend">
+    <h2>표시 방법</h2>
+    빈 줄 = 코너 나누기<br>
+    <code>##제목</code> → <span class="y">노랑 (코너 시작, 첫 문장)</span><br>
+    <code>!!펀치라인!!</code> → <span class="r">빨강 (펀치라인)</span><br>
+    <code>(쉼)</code> 처럼 괄호 → <span class="g">회색 (호흡, 침묵, 지시문)</span><br>
+    기호를 붙인 줄은 자동 색칠보다 기호가 우선이에요.
+  </div>
+
+  <button class="btn primary" id="startBtn">▶ 시작</button>
+</section>
+
+<section id="stage">
+  <div id="scroller"></div>
+  <div id="fadeT"></div><div id="fadeB"></div>
+  <div id="guide"></div>
+  <div id="bar"></div>
+  <div id="tapnote">화면을 탭하면 일시정지</div>
+  <div id="hud">
+    <button class="btn" id="backBtn">✕</button>
+    <button class="btn" id="restartBtn">⟲</button>
+    <button class="btn" id="slowBtn">−</button>
+    <span id="time">0:00 / 5:00</span>
+    <button class="btn" id="fastBtn">+</button>
+    <button class="btn" id="playBtn">⏸</button>
+  </div>
+  <div id="count">3</div>
+</section>
+
+<script src="main.js"></script>
+</body>
+</html>
