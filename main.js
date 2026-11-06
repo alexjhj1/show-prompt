@@ -102,9 +102,13 @@
     // 브라우저가 서식째 붙여넣은 뒤에 읽어서 볼드체를 놓치지 않는다
     setTimeout(()=>{
       src.innerHTML=render(readLines(src));
-      const r=document.createRange();r.selectNodeContents(src);r.collapse(false);
-      const s=getSelection();s.removeAllRanges();s.addRange(r);
       refresh();save();
+      // 붙여넣은 뒤에는 고칠 일이 없으니 키보드를 내리고 첫 줄로 돌아간다
+      getSelection().removeAllRanges();
+      src.blur();
+      src.scrollTop=0;
+      // 키보드가 내려가는 동안 화면이 다시 움직여도 첫 줄에 머물게 한다
+      setTimeout(()=>{src.scrollTop=0;},350);
     },0);
   });
   // 직접 고친 내용도 입력을 마치면 괄호 색칠을 다시 입힌다
