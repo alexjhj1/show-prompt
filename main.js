@@ -30,7 +30,10 @@
         if(n.nodeType===3){
           // 태그 사이 들여쓰기 줄바꿈은 글자가 아니다
           if(/^\s*\n\s*$/.test(n.nodeValue)&&n.parentNode!==root&&[...n.parentNode.children].some(c=>BLOCK.test(c.tagName)))return;
-          add(n.nodeValue,n.parentNode===root?false:isBold(n.parentNode));
+          // 괄호 색칠용 칸은 굵기 판단에서 건너뛴다
+          let el=n.parentNode;
+          while(el!==root&&el.classList.contains('pause'))el=el.parentNode;
+          add(n.nodeValue,el===root?false:isBold(el));
         }else if(n.nodeType===1&&!SKIP.test(n.tagName)){
           if(n.tagName==='BR'){lines.push([]);return;}
           const block=BLOCK.test(n.tagName);
@@ -45,22 +48,17 @@
     while(lines.length&&!lines[0].length)lines.shift();
     return lines;
   }
-  // 입력 칸에는 줄과 볼드만 남긴다 (붙여넣은 글자색·크기는 버린다)
-  function editorHTML(lines){
-    return lines.map(l=>'<div>'+(l.length?l.map(r=>r.b?`<b>${esc(r.t)}</b>`:esc(r.t)).join(''):'<br>')+'</div>').join('');
-  }
-  // 재생 화면: 볼드체는 노랑, 괄호 글씨는 진한 회색
+  // 입력 칸과 재생 화면이 같은 모양을 쓴다: 볼드체는 노랑, 괄호 글씨는 진한 회색
+  // 붙여넣은 글자색·크기는 버리고 줄과 볼드만 남긴다
   function paint(t){return esc(t).replace(/(\([^)]*\)|（[^）]*）)/g,'<span class="pause">$1</span>');}
-  function stageHTML(lines){
-    return lines.map(l=>l.length
-      ?'<p class="ln">'+l.map(r=>r.b?`<b>${paint(r.t)}</b>`:paint(r.t)).join('')+'</p>'
-      :'<p class="ln gap"></p>').join('');
+  function render(lines){
+    return lines.map(l=>'<div class="ln">'+(l.length?l.map(r=>r.b?`<b>${paint(r.t)}</b>`:paint(r.t)).join(''):'<br>')+'</div>').join('');
   }
 
   // ---- 저장 (이 브라우저에만) ----
   const KEY='standup-prompter-v2', OLD='standup-prompter-v1';
   function save(){
-    try{localStorage.setItem(KEY,JSON.stringify({h:editorHTML(readLines(src)),v:speedEl.value,z:size.value}))}catch(e){}
+    try{localStorage.setItem(KEY,JSON.stringify({h:render(readLines(src)),v:speedEl.value,z:size.value}))}catch(e){}
   }
   function refresh(){
     const lines=readLines(src);
@@ -71,14 +69,16 @@
     $('stat').textContent=chars?`코너 ${blocks}개 · ${chars}자`:'';
     speedV.textContent=speedEl.value;
     sizeV.textContent=size.value;
+    // 글자 크기 바를 움직이면 입력 칸이 바로 같은 크기로 바뀐다
+    src.style.fontSize=size.value+'px';
   }
   try{
     const d=JSON.parse(localStorage.getItem(KEY)||'null');
-    if(d){src.innerHTML=d.h||'';speedEl.value=d.v||5;size.value=d.z||38;}
+    if(d){src.innerHTML=d.h||'';src.innerHTML=render(readLines(src));speedEl.value=d.v||5;size.value=d.z||38;}
     else{
       // 이전 버전에 저장한 대본 가져오기
       const o=JSON.parse(localStorage.getItem(OLD)||'null');
-      if(o){src.innerHTML=editorHTML((o.t||'').split('\n').map(t=>t?[{t,b:false}]:[]));size.value=o.z||38;}
+      if(o){src.innerHTML=render((o.t||'').split('\n').map(t=>t?[{t,b:false}]:[]));size.value=o.z||38;}
     }
   }catch(e){}
   refresh();
@@ -88,11 +88,16 @@
   src.addEventListener('paste',()=>{
     // 브라우저가 서식째 붙여넣은 뒤에 읽어서 볼드체를 놓치지 않는다
     setTimeout(()=>{
-      src.innerHTML=editorHTML(readLines(src));
+      src.innerHTML=render(readLines(src));
       const r=document.createRange();r.selectNodeContents(src);r.collapse(false);
       const s=getSelection();s.removeAllRanges();s.addRange(r);
       refresh();save();
     },0);
+  });
+  // 직접 고친 내용도 입력을 마치면 괄호 색칠을 다시 입힌다
+  src.addEventListener('blur',()=>{
+    const h=render(readLines(src));
+    if(src.innerHTML!==h)src.innerHTML=h;
   });
   $('clearBtn').onclick=()=>{src.innerHTML='';refresh();save();src.focus();};
 
@@ -141,7 +146,7 @@
     const lines=readLines(src);
     if(!lines.length){src.focus();return;}
     y=0;
-    scroller.innerHTML=stageHTML(lines);
+    scroller.innerHTML=render(lines);
     stage.classList.add('on');document.body.style.overflow='hidden';
     layout();
     play();

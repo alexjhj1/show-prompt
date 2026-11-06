@@ -10,11 +10,12 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
 button{font:inherit;color:inherit;cursor:pointer}
 
 /* 설정 화면 */
-#setup{max-width:640px;margin:0 auto;padding:16px 16px 40px}
-#src{width:100%;min-height:50vh;max-height:60vh;overflow-y:auto;background:var(--panel);color:var(--text);
-  border:1px solid var(--line);border-radius:12px;padding:14px;font-size:16px;line-height:1.6;outline:none;
+#setup{padding:0 0 40px}
+#opts{max-width:640px;margin:0 auto;padding:0 16px}
+/* 입력 칸은 재생 화면과 같은 배경·여백·글자 크기로 보여 준다 */
+#src{width:100%;min-height:50vh;max-height:60vh;overflow-y:auto;background:#000;color:var(--text);
+  border-bottom:1px solid var(--line);padding:16px 6vw;line-height:1.45;outline:none;
   white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere;-webkit-user-select:text;user-select:text}
-#src b,#src strong{color:var(--yellow);font-weight:700}
 #src.empty::before{content:attr(data-placeholder);color:var(--dim)}
 .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 14px;margin-top:14px}
@@ -31,10 +32,10 @@ input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
   -webkit-user-select:none;user-select:none}
 #stage.on{display:block}
 #scroller{position:absolute;left:0;right:0;top:0;will-change:transform;padding:0 6vw}
-.ln{margin:0 0 .35em;line-height:1.45;word-break:keep-all;overflow-wrap:anywhere;white-space:pre-wrap}
-.ln.gap{height:1em;margin:0}
-.ln b{color:var(--yellow);font-weight:700}
-.ln .pause{color:var(--gray);font-weight:400}
+/* 대본 글자 모양: 입력 칸과 재생 화면이 함께 쓴다 */
+.ln,#src>div{margin:0 0 .35em;line-height:1.45;word-break:keep-all;overflow-wrap:anywhere;white-space:pre-wrap}
+.ln b,#src b,#src strong{color:var(--yellow);font-weight:700}
+.pause{color:var(--gray);font-weight:400}
 #fadeT,#fadeB{position:absolute;left:0;right:0;pointer-events:none}
 #fadeT{top:0;height:18%;background:linear-gradient(#000,transparent)}
 #fadeB{bottom:0;height:18%;background:linear-gradient(transparent,#000)}
