@@ -58,19 +58,22 @@
   // ---- 저장 (이 브라우저에만) ----
   const KEY='standup-prompter-v2', OLD='standup-prompter-v1';
   // 기본값을 바꾸면 이 번호를 올린다. 예전 기본값으로 저장된 속도·크기는 새 기본값으로 시작한다
-  const DEFAULTS=3;
+  const DEFAULTS=4;
   function save(){
     try{localStorage.setItem(KEY,JSON.stringify({h:render(readLines(src)),v:speedEl.value,z:size.value,n:DEFAULTS}))}catch(e){}
   }
   function refresh(){
     const lines=readLines(src);
-    const chars=lines.reduce((n,l)=>n+l.reduce((m,r)=>m+r.t.replace(/\s/g,'').length,0),0);
+    const lineText=lines.map(l=>l.map(r=>r.t).join(''));
+    const hasText=lineText.some(t=>t.trim());
+    // 괄호 안 글자(회색)는 말하지 않는 지시문이라 글자 수에서 뺀다
+    const chars=lineText.reduce((n,t)=>n+t.replace(/\([^)]*\)|（[^）]*）/g,'').replace(/\s/g,'').length,0);
     // 노란색(볼드)으로 쓴 한 덩어리가 펀치라인 하나다
     const punch=lines.reduce((n,l)=>n+l.filter(r=>r.b&&r.t.trim()).length,0);
-    src.classList.toggle('empty',!chars);
+    src.classList.toggle('empty',!hasText);
     // 1,350자(5분)에 펀치라인 25개면 100점. 글자 수에 비례해 목표 개수를 잡는다
-    const score=Math.min(100,Math.round(punch/(chars/1350*25)*100));
-    $('stat').innerHTML=chars?`${chars.toLocaleString()}자 · <span class="y">펀치라인 ${punch}개 · ${score}점</span>`:'';
+    const score=chars?Math.min(100,Math.round(punch/(chars/1350*25)*100)):0;
+    $('stat').innerHTML=hasText?`${chars.toLocaleString()}자 · <span class="y">펀치라인 ${punch}개 · ${score}점</span>`:'';
     speedV.textContent=speedEl.value;
     sizeV.textContent=size.value;
     // 글자 크기 바를 움직이면 입력 칸이 바로 같은 크기로 바뀐다
@@ -78,7 +81,7 @@
   }
   try{
     const d=JSON.parse(localStorage.getItem(KEY)||'null');
-    if(d){src.innerHTML=d.h||'';src.innerHTML=render(readLines(src));if(d.n>=2)size.value=d.z;if(d.n===DEFAULTS)speedEl.value=d.v;}
+    if(d){src.innerHTML=d.h||'';src.innerHTML=render(readLines(src));if(d.n>=2)size.value=d.z;if(d.n===3)speedEl.value=d.v*2-1;if(d.n===DEFAULTS)speedEl.value=d.v;}
     else{
       // 이전 버전에 저장한 대본 가져오기
       const o=JSON.parse(localStorage.getItem(OLD)||'null');
@@ -123,7 +126,7 @@
   speedEl.addEventListener('input',preview);
 
   // 기본 속도로 되돌리기
-  $('speedReset').onclick=()=>{speedEl.value=5;refresh();save();preview();};
+  $('speedReset').onclick=()=>{speedEl.value=9;refresh();save();preview();};
   // 메모 앱 기본 글자 크기로 되돌리기
   $('sizeReset').onclick=()=>{size.value=17;refresh();save();};
   // 옵션 영역은 끌어도 움직이지 않는다 (슬라이더만 예외)
@@ -160,10 +163,10 @@
   showIcon('pause');
   let y=0, playing=false, last=0, raf=0, distance=0, toastTimer=0;
 
-  // 속도 1~10: 한 단계마다 약 1.36배씩 빨라져 1은 초당 약 0.7줄, 10은 약 11줄이다
+  // 속도 1~19: 한 단계마다 약 1.17배씩 빨라져 1은 초당 약 0.7줄, 19는 약 11줄이다
   // 글자 크기에 비례해서 글자 크기를 바꿔도 줄이 지나가는 빠르기는 같다
   function pxPerSec(){
-    return 0.9*Math.pow(16,(+speedEl.value-1)/9)*(+size.value);
+    return 0.9*Math.pow(16,(+speedEl.value-1)/18)*(+size.value);
   }
   function layout(){
     const vh=stage.clientHeight, top=Math.round(vh*0.33);
