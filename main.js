@@ -57,8 +57,10 @@
 
   // ---- 저장 (이 브라우저에만) ----
   const KEY='standup-prompter-v2', OLD='standup-prompter-v1';
+  // 기본값을 바꾸면 이 번호를 올린다. 예전 기본값으로 저장된 속도·크기는 새 기본값으로 시작한다
+  const DEFAULTS=2;
   function save(){
-    try{localStorage.setItem(KEY,JSON.stringify({h:render(readLines(src)),v:speedEl.value,z:size.value}))}catch(e){}
+    try{localStorage.setItem(KEY,JSON.stringify({h:render(readLines(src)),v:speedEl.value,z:size.value,n:DEFAULTS}))}catch(e){}
   }
   function refresh(){
     const lines=readLines(src);
@@ -74,11 +76,11 @@
   }
   try{
     const d=JSON.parse(localStorage.getItem(KEY)||'null');
-    if(d){src.innerHTML=d.h||'';src.innerHTML=render(readLines(src));speedEl.value=d.v||5;size.value=d.z||38;}
+    if(d){src.innerHTML=d.h||'';src.innerHTML=render(readLines(src));if(d.n===DEFAULTS){speedEl.value=d.v;size.value=d.z;}}
     else{
       // 이전 버전에 저장한 대본 가져오기
       const o=JSON.parse(localStorage.getItem(OLD)||'null');
-      if(o){src.innerHTML=render((o.t||'').split('\n').map(t=>t?[{t,b:false}]:[]));size.value=o.z||38;}
+      if(o){src.innerHTML=render((o.t||'').split('\n').map(t=>t?[{t,b:false}]:[]));}
     }
   }catch(e){}
   refresh();
@@ -136,7 +138,7 @@
   function pause(){playing=false;playBtn.textContent='▶';cancelAnimationFrame(raf);}
   function toggle(){playing?pause():play();}
   function changeSpeed(d){
-    speedEl.value=Math.min(15,Math.max(1,+speedEl.value+d));
+    speedEl.value=+speedEl.value+d;
     refresh();save();
     toast.textContent='속도 '+speedEl.value;toast.classList.add('show');
     clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),900);
