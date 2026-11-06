@@ -68,7 +68,9 @@
     // 노란색(볼드)으로 쓴 한 덩어리가 펀치라인 하나다
     const punch=lines.reduce((n,l)=>n+l.filter(r=>r.b&&r.t.trim()).length,0);
     src.classList.toggle('empty',!chars);
-    $('stat').innerHTML=chars?`${chars.toLocaleString()}자 · <span class="y">펀치라인 ${punch}개</span>`:'';
+    // 1,350자(5분)에 펀치라인 25개면 100점. 글자 수에 비례해 목표 개수를 잡는다
+    const score=Math.min(100,Math.round(punch/(chars/1350*25)*100));
+    $('stat').innerHTML=chars?`${chars.toLocaleString()}자 · <span class="y">펀치라인 ${punch}개 · ${score}점</span>`:'';
     speedV.textContent=speedEl.value;
     sizeV.textContent=size.value;
     // 글자 크기 바를 움직이면 입력 칸이 바로 같은 크기로 바뀐다
@@ -120,8 +122,21 @@
   }
   speedEl.addEventListener('input',preview);
 
+  // 기본 속도로 되돌리기
+  $('speedReset').onclick=()=>{speedEl.value=5;refresh();save();preview();};
   // 메모 앱 기본 글자 크기로 되돌리기
   $('sizeReset').onclick=()=>{size.value=17;refresh();save();};
+  // 옵션 영역은 끌어도 움직이지 않는다 (슬라이더만 예외)
+  const opts=$('opts');
+  opts.addEventListener('touchmove',e=>{if(e.target.type!=='range')e.preventDefault();},{passive:false});
+  // 옵션을 누르면 키보드를 내린다
+  opts.addEventListener('touchstart',()=>{if(document.activeElement===src)src.blur();},{passive:true});
+  // 키보드가 올라오면 화면 높이를 맞춰서 대본 칸이 가려지지 않게 한다
+  const vv=window.visualViewport;
+  if(vv){
+    const fit=()=>{document.documentElement.style.setProperty('--vh',vv.height+'px');window.scrollTo(0,0);};
+    vv.addEventListener('resize',fit);fit();
+  }
   $('clearBtn').onclick=()=>{src.innerHTML='';refresh();save();src.focus();};
 
   // ---- 재생 ----
@@ -179,11 +194,11 @@
     src.blur();pvEnd=0;
     y=0;
     scroller.innerHTML=render(lines);
-    stage.classList.add('on');document.body.style.overflow='hidden';
+    stage.classList.add('on');
     layout();
     play();
   };
-  function close(){pause();stage.classList.remove('on');document.body.style.overflow='';}
+  function close(){pause();stage.classList.remove('on');}
   const hud=$('hud');
   [['backBtn',close],['slowBtn',()=>changeSpeed(-1)],['playBtn',toggle],['fastBtn',()=>changeSpeed(1)]].forEach(([id,fn])=>{
     $(id).addEventListener('click',e=>{e.stopPropagation();fn();});
@@ -195,24 +210,17 @@
     const b=e.target.closest('button');
     if(b)b.click();
   },{passive:false});
-  stage.addEventListener('click',toggle);
 
-  // 끌면 재생을 멈추지 않고 위치만 옮기고, 끌지 않고 탭하면 재생·일시정지
-  let lastY=null,startY=0,moved=false;
-  stage.addEventListener('touchstart',e=>{lastY=startY=e.touches[0].clientY;moved=false;},{passive:true});
+  // 재생 화면은 탭해도 멈추지 않고, 끌면 재생을 유지한 채 위치만 옮긴다. 정지는 아래 버튼으로 한다
+  let lastY=null;
+  stage.addEventListener('touchstart',e=>{lastY=e.touches[0].clientY;},{passive:true});
   stage.addEventListener('touchmove',e=>{
     if(lastY===null)return;
     const cy=e.touches[0].clientY;
-    if(Math.abs(cy-startY)>8)moved=true;
-    if(moved){y=Math.min(distance,Math.max(0,y-(cy-lastY)));apply();}
+    y=Math.min(distance,Math.max(0,y-(cy-lastY)));apply();
     lastY=cy;
   },{passive:true});
-  stage.addEventListener('touchend',e=>{
-    if(lastY===null)return;
-    e.preventDefault();
-    if(!moved)toggle();
-    lastY=null;moved=false;
-  });
+  stage.addEventListener('touchend',()=>{lastY=null;});
 
   document.addEventListener('keydown',e=>{
     if(!stage.classList.contains('on'))return;
