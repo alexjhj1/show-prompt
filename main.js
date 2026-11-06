@@ -176,22 +176,29 @@
   // 옵션을 누르면 키보드를 내린다
   opts.addEventListener('touchstart',()=>{if(document.activeElement===src)src.blur();},{passive:true});
   // 화면 높이 맞추기
-  // 홈 화면 앱에서는 브라우저가 알려 주는 높이가 상태 표시줄만큼 모자라서 기기 화면 높이를 쓴다
-  // 키보드가 올라오면 그만큼 빼서 대본 칸이 가려지지 않게 한다
+  // 홈 화면 앱에서는 브라우저가 알려 주는 높이가 상태 표시줄만큼 모자라거나 때에 따라 달라져서 기기 화면 높이를 쓴다
+  // 입력 중일 때만 키보드 높이를 빼서 대본 칸이 가려지지 않게 한다. 높이가 조금 줄어든 것을 키보드로 착각하면 아래에 빈 공간이 생긴다
   const vv=window.visualViewport;
+  const isApp=()=>navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;
   let baseH=0, baseW=0;
   function fit(){
     const h=vv?vv.height:window.innerHeight, w=window.innerWidth;
-    if(w!==baseW){baseW=w;baseH=h;}
+    const typing=document.activeElement===src;
+    if(w!==baseW||!typing){baseW=w;baseH=h;}
     baseH=Math.max(baseH,h);
-    const landscape=w>h&&w>baseH;
-    const full=navigator.standalone?(landscape?screen.width:screen.height):baseH;
-    document.documentElement.style.setProperty('--vh',(full-(baseH-h))+'px');
+    const kb=typing&&baseH-h>120?baseH-h:0;
+    const narrow=Math.min(screen.width,screen.height), long=Math.max(screen.width,screen.height);
+    const full=isApp()?(w>narrow?narrow:long):baseH;
+    document.documentElement.style.setProperty('--vh',(full-kb)+'px');
     window.scrollTo(0,0);
     if(stage.classList.contains('on'))layout();
   }
   if(vv)vv.addEventListener('resize',fit);
   window.addEventListener('resize',fit);
+  // 다른 앱에서 돌아오거나 키보드를 닫을 때도 높이를 다시 맞춘다
+  window.addEventListener('pageshow',fit);
+  document.addEventListener('visibilitychange',fit);
+  src.addEventListener('blur',fit);
   $('clearBtn').onclick=()=>{src.innerHTML='';refresh();save();src.focus();};
 
   // ---- 재생 ----
