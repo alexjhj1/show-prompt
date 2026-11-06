@@ -8,23 +8,25 @@
   // ---- 입력 칸 내용 → 줄 목록 (각 줄은 글자 조각과 볼드·밑줄 여부) ----
   const BLOCK=/^(DIV|P|LI|UL|OL|H[1-6]|TR|TABLE|BLOCKQUOTE|PRE|SECTION|ARTICLE)$/;
   const SKIP=/^(STYLE|SCRIPT|META|TITLE|HEAD|LINK)$/;
+  // 제목 태그와, 한 번 제목으로 판단해 표시해 둔 글씨
+  const TITLE='h1,h2,h3,h4,h5,h6,.ttl';
   function isBold(el){
     // 제목 태그는 원래 굵게 나오므로 볼드로 치지 않는다
-    if(el.closest('h1,h2,h3,h4,h5,h6'))return false;
+    if(el.closest(TITLE))return false;
     const cs=getComputedStyle(el), w=cs.fontWeight;
     return w==='bold'||parseInt(w,10)>=600||/bold/i.test(cs.fontFamily);
   }
   function readLines(root){
     const lines=[[]];
     const cur=()=>lines[lines.length-1];
-    function add(text,bold,under,size){
+    function add(text,bold,under,size,title){
       // 아이폰 메모의 특수 줄바꿈도 줄바꿈으로 본다
       text.replace(/\r\n?/g,'\n').split(/[\n\u2028\u2029]/).forEach((p,i)=>{
         if(i)lines.push([]);
         p=p.replace(/\u00a0/g,' ').replace(/[\ufffc\u200b\ufeff]/g,'');
         if(!p)return;
         const l=cur(), last=l[l.length-1];
-        if(last&&last.b===bold&&last.u===under&&last.z===size)last.t+=p; else l.push({t:p,b:bold,u:under,z:size});
+        if(last&&last.b===bold&&last.u===under&&last.z===size&&last.h===title)last.t+=p; else l.push({t:p,b:bold,u:under,z:size,h:title});
       });
     }
     function walk(node,under){
@@ -35,7 +37,7 @@
           // 괄호 색칠용 칸은 굵기 판단에서 건너뛴다
           let el=n.parentNode;
           while(el!==root&&/pause|plain/.test(el.className))el=el.parentNode;
-          add(n.nodeValue,el===root?false:isBold(el),under,parseFloat(getComputedStyle(el).fontSize));
+          add(n.nodeValue,el===root?false:isBold(el),under,parseFloat(getComputedStyle(el).fontSize),!!el.closest(TITLE));
         }else if(n.nodeType===1&&!SKIP.test(n.tagName)){
           if(n.tagName==='BR'){lines.push([]);return;}
           const block=BLOCK.test(n.tagName);
@@ -52,7 +54,7 @@
     plainTitles(lines);
     return lines;
   }
-  // 본문보다 큰 글씨는 메모의 제목이다. 볼드·밑줄로 치지 않고 일반 글씨로 둔다
+  // 본문보다 큰 글씨는 메모의 제목이다. 볼드·밑줄로 치지 않고 일반 글씨로 두며 글자 수에서도 뺀다
   function plainTitles(lines){
     const by={};
     lines.flat().forEach(r=>{by[r.z]=(by[r.z]||0)+r.t.length;});
@@ -60,10 +62,10 @@
     lines.forEach((l,i)=>{
       const out=[];
       l.forEach(r=>{
-        if(r.z>body*1.15){r.b=false;r.u=false;}
+        if(r.h||r.z>body*1.15){r.b=false;r.u=false;r.h=true;}
         r.z=body;
         const last=out[out.length-1];
-        if(last&&last.b===r.b&&last.u===r.u)last.t+=r.t; else out.push(r);
+        if(last&&last.b===r.b&&last.u===r.u&&last.h===r.h)last.t+=r.t; else out.push(r);
       });
       lines[i]=out;
     });
@@ -80,6 +82,7 @@
   function render(lines){
     return lines.map(l=>'<div class="ln">'+(l.length?l.map(r=>{
       const t=paint(r.t);
+      if(r.h)return `<span class="ttl">${t}</span>`;
       return r.b&&r.u?`<b><u>${t}</u></b>`:r.b?`<b>${t}</b>`:r.u?`<u>${t}</u>`:t;
     }).join(''):'<br>')+'</div>').join('');
   }
@@ -95,8 +98,9 @@
     const lines=readLines(src);
     const lineText=lines.map(l=>l.map(r=>r.t).join(''));
     const hasText=lineText.some(t=>t.trim());
-    // 괄호 안 글자(회색)는 말하지 않는 지시문이라 글자 수에서 뺀다
-    const chars=lineText.reduce((n,t)=>n+t.replace(/\([^)]*\)|（[^）]*）/g,'').replace(/\s/g,'').length,0);
+    // 말하지 않는 글자는 글자 수에서 뺀다: 제목, 괄호 안 지시문(회색), 이모지·기호
+    const spoken=lines.map(l=>l.filter(r=>!r.h).map(r=>r.t).join(''));
+    const chars=spoken.reduce((n,t)=>n+t.replace(/\([^)]*\)|（[^）]*）/g,'').replace(SYMBOL,'').replace(/\s/g,'').length,0);
     // 표시된 한 덩어리를 하나로 센다
     const count=f=>lines.reduce((n,l)=>n+l.filter(r=>f(r)&&r.t.replace(SYMBOL,'').trim()).length,0);
     const jab=count(r=>r.b&&!r.u), punch=count(r=>r.u);
