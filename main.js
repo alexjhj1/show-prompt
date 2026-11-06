@@ -65,10 +65,10 @@
   function refresh(){
     const lines=readLines(src);
     const chars=lines.reduce((n,l)=>n+l.reduce((m,r)=>m+r.t.replace(/\s/g,'').length,0),0);
-    let blocks=0;
-    lines.forEach((l,i)=>{if(l.length&&(i===0||!lines[i-1].length))blocks++;});
+    // 노란색(볼드)으로 쓴 한 덩어리가 펀치라인 하나다
+    const punch=lines.reduce((n,l)=>n+l.filter(r=>r.b&&r.t.trim()).length,0);
     src.classList.toggle('empty',!chars);
-    $('stat').textContent=chars?`코너 ${blocks}개 · ${chars}자`:'';
+    $('stat').innerHTML=chars?`${chars.toLocaleString()}자 · <span class="y">펀치라인 ${punch}개</span>`:'';
     speedV.textContent=speedEl.value;
     sizeV.textContent=size.value;
     // 글자 크기 바를 움직이면 입력 칸이 바로 같은 크기로 바뀐다
@@ -101,6 +101,25 @@
     const h=render(readLines(src));
     if(src.innerHTML!==h)src.innerHTML=h;
   });
+  // 속도 바를 움직이면 입력 칸이 그 속도로 잠깐 올라가서 빠르기를 미리 보여 준다
+  let pv=0, pvEnd=0, pvLast=0, pvY=0;
+  function previewTick(ts){
+    if(ts>pvEnd){pv=0;return;}
+    const dt=Math.min(0.1,Math.max(0,(ts-pvLast)/1000));pvLast=ts;
+    const max=src.scrollHeight-src.clientHeight;
+    if(max>0){
+      pvY+=pxPerSec()*dt;
+      if(pvY>=max)pvY=0;
+      src.scrollTop=pvY;
+    }
+    pv=requestAnimationFrame(previewTick);
+  }
+  function preview(){
+    pvEnd=performance.now()+3000;
+    if(!pv){pvY=src.scrollTop;pvLast=performance.now();pv=requestAnimationFrame(previewTick);}
+  }
+  speedEl.addEventListener('input',preview);
+
   $('clearBtn').onclick=()=>{src.innerHTML='';refresh();save();src.focus();};
 
   // ---- 재생 ----
@@ -147,36 +166,50 @@
   $('startBtn').onclick=()=>{
     const lines=readLines(src);
     if(!lines.length){src.focus();return;}
+    // 키보드를 내리고 미리보기를 멈춘다
+    src.blur();pvEnd=0;
     y=0;
     scroller.innerHTML=render(lines);
     stage.classList.add('on');document.body.style.overflow='hidden';
     layout();
     play();
   };
-  $('backBtn').onclick=e=>{e.stopPropagation();pause();stage.classList.remove('on');document.body.style.overflow='';};
-  $('slowBtn').onclick=e=>{e.stopPropagation();changeSpeed(-0.5);};
-  $('fastBtn').onclick=e=>{e.stopPropagation();changeSpeed(0.5);};
-  playBtn.onclick=e=>{e.stopPropagation();toggle();};
-  $('hud').addEventListener('click',e=>e.stopPropagation());
+  function close(){pause();stage.classList.remove('on');document.body.style.overflow='';}
+  const hud=$('hud');
+  [['backBtn',close],['slowBtn',()=>changeSpeed(-0.5)],['playBtn',toggle],['fastBtn',()=>changeSpeed(0.5)]].forEach(([id,fn])=>{
+    $(id).addEventListener('click',e=>{e.stopPropagation();fn();});
+  });
+  hud.addEventListener('click',e=>e.stopPropagation());
+  // 아이폰에서는 손가락이 닿는 순간 바로 버튼이 눌리게 한다
+  hud.addEventListener('touchstart',e=>{
+    e.preventDefault();e.stopPropagation();
+    const b=e.target.closest('button');
+    if(b)b.click();
+  },{passive:false});
   stage.addEventListener('click',toggle);
 
-  // 손가락으로 위아래로 끌어 위치 조정
+  // 손가락으로 위아래로 끌면 위치 조정, 끌지 않고 탭하면 재생·일시정지
   let dragY=null,dragStart=0,moved=false;
-  stage.addEventListener('touchstart',e=>{if(e.target.closest('#hud'))return;dragY=e.touches[0].clientY;dragStart=y;moved=false;},{passive:true});
+  stage.addEventListener('touchstart',e=>{dragY=e.touches[0].clientY;dragStart=y;moved=false;},{passive:true});
   stage.addEventListener('touchmove',e=>{
     if(dragY===null)return;
     const dy=e.touches[0].clientY-dragY;
     if(Math.abs(dy)>8){moved=true;if(playing)pause();}
     if(moved){y=Math.min(distance,Math.max(0,dragStart-dy));apply();}
   },{passive:true});
-  stage.addEventListener('touchend',e=>{if(moved)e.preventDefault();dragY=null;});
+  stage.addEventListener('touchend',e=>{
+    if(dragY===null)return;
+    e.preventDefault();
+    if(!moved)toggle();
+    dragY=null;moved=false;
+  });
 
   document.addEventListener('keydown',e=>{
     if(!stage.classList.contains('on'))return;
     if(e.code==='Space'){e.preventDefault();toggle();}
     if(e.key==='ArrowUp')changeSpeed(0.5);
     if(e.key==='ArrowDown')changeSpeed(-0.5);
-    if(e.key==='Escape')$('backBtn').click();
+    if(e.key==='Escape')close();
   });
   window.addEventListener('resize',()=>{if(stage.classList.contains('on'))layout();});
 })();
