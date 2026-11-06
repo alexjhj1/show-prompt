@@ -1,11 +1,11 @@
-// 스탠드업 프롬프터: 볼드체·괄호 색칠 + 속도 조절 자동 스크롤
+// 스탠드업 프롬프터: 잽·펀치·킬링 색칠 + 속도 조절 자동 스크롤
 (function(){
   const $ = id => document.getElementById(id);
   const src=$('src'), speedEl=$('speed'), speedV=$('speedV'), size=$('size'), sizeV=$('sizeV');
   const stage=$('stage'), scroller=$('scroller'), playBtn=$('playBtn'), toast=$('toast');
   const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  // ---- 입력 칸 내용 → 줄 목록 (각 줄은 글자 조각과 볼드 여부) ----
+  // ---- 입력 칸 내용 → 줄 목록 (각 줄은 글자 조각과 볼드·밑줄 여부) ----
   const BLOCK=/^(DIV|P|LI|UL|OL|H[1-6]|TR|TABLE|BLOCKQUOTE|PRE|SECTION|ARTICLE)$/;
   const SKIP=/^(STYLE|SCRIPT|META|TITLE|HEAD|LINK)$/;
   function isBold(el){
@@ -15,17 +15,17 @@
   function readLines(root){
     const lines=[[]];
     const cur=()=>lines[lines.length-1];
-    function add(text,bold){
+    function add(text,bold,under){
       // 아이폰 메모의 특수 줄바꿈도 줄바꿈으로 본다
       text.replace(/\r\n?/g,'\n').split(/[\n\u2028\u2029]/).forEach((p,i)=>{
         if(i)lines.push([]);
         p=p.replace(/\u00a0/g,' ').replace(/[\ufffc\u200b\ufeff]/g,'');
         if(!p)return;
         const l=cur(), last=l[l.length-1];
-        if(last&&last.b===bold)last.t+=p; else l.push({t:p,b:bold});
+        if(last&&last.b===bold&&last.u===under)last.t+=p; else l.push({t:p,b:bold,u:under});
       });
     }
-    function walk(node){
+    function walk(node,under){
       node.childNodes.forEach(n=>{
         if(n.nodeType===3){
           // 태그 사이 들여쓰기 줄바꿈은 글자가 아니다
@@ -33,26 +33,31 @@
           // 괄호 색칠용 칸은 굵기 판단에서 건너뛴다
           let el=n.parentNode;
           while(el!==root&&el.classList.contains('pause'))el=el.parentNode;
-          add(n.nodeValue,el===root?false:isBold(el));
+          add(n.nodeValue,el===root?false:isBold(el),under);
         }else if(n.nodeType===1&&!SKIP.test(n.tagName)){
           if(n.tagName==='BR'){lines.push([]);return;}
           const block=BLOCK.test(n.tagName);
           if(block&&cur().length)lines.push([]);
-          walk(n);
+          // 밑줄은 자식에게 이어지지 않아서 위에서 내려 준다. 링크의 기본 밑줄은 빼고 본다
+          walk(n,under||n.tagName==='U'||(n.tagName!=='A'&&/underline/.test(getComputedStyle(n).textDecorationLine)));
           if(block&&cur().length)lines.push([]);
         }
       });
     }
-    walk(root);
+    walk(root,false);
     while(lines.length&&!lines[lines.length-1].length)lines.pop();
     while(lines.length&&!lines[0].length)lines.shift();
     return lines;
   }
-  // 입력 칸과 재생 화면이 같은 모양을 쓴다: 볼드체는 노랑, 괄호 글씨는 진한 회색
-  // 붙여넣은 글자색·크기는 버리고 줄과 볼드만 남긴다
+  // 입력 칸과 재생 화면이 같은 모양을 쓴다
+  // 볼드만 = 잽(색 없음), 밑줄만 = 펀치(노랑), 볼드+밑줄 = 킬링(빨강), 괄호 글씨 = 진한 회색
+  // 붙여넣은 글자색·크기는 버리고 줄과 볼드·밑줄만 남긴다
   function paint(t){return esc(t).replace(/(\([^)]*\)|（[^）]*）)/g,'<span class="pause">$1</span>');}
   function render(lines){
-    return lines.map(l=>'<div class="ln">'+(l.length?l.map(r=>r.b?`<b>${paint(r.t)}</b>`:paint(r.t)).join(''):'<br>')+'</div>').join('');
+    return lines.map(l=>'<div class="ln">'+(l.length?l.map(r=>{
+      const t=paint(r.t);
+      return r.b&&r.u?`<b><u>${t}</u></b>`:r.b?`<b>${t}</b>`:r.u?`<u>${t}</u>`:t;
+    }).join(''):'<br>')+'</div>').join('');
   }
 
   // ---- 저장 (이 브라우저에만) ----
@@ -68,12 +73,11 @@
     const hasText=lineText.some(t=>t.trim());
     // 괄호 안 글자(회색)는 말하지 않는 지시문이라 글자 수에서 뺀다
     const chars=lineText.reduce((n,t)=>n+t.replace(/\([^)]*\)|（[^）]*）/g,'').replace(/\s/g,'').length,0);
-    // 노란색(볼드)으로 쓴 한 덩어리가 펀치라인 하나다
-    const punch=lines.reduce((n,l)=>n+l.filter(r=>r.b&&r.t.trim()).length,0);
+    // 표시된 한 덩어리를 하나로 센다
+    const count=f=>lines.reduce((n,l)=>n+l.filter(r=>f(r)&&r.t.trim()).length,0);
+    const jab=count(r=>r.b&&!r.u), punch=count(r=>!r.b&&r.u), kill=count(r=>r.b&&r.u);
     src.classList.toggle('empty',!hasText);
-    // 1,350자(5분)에 펀치라인 25개면 100점. 글자 수에 비례해 목표 개수를 잡는다
-    const score=chars?Math.min(100,Math.round(punch/(chars/1350*25)*100)):0;
-    $('stat').innerHTML=hasText?`${chars.toLocaleString()}자 · <span class="y">펀치라인 ${punch}개 · ${score}점</span>`:'';
+    $('stat').innerHTML=hasText?`${chars.toLocaleString()}자 · 잽 ${jab} · <span class="y">펀치 ${punch}</span> · <span class="r">킬링 ${kill}</span>`:'';
     speedV.textContent=speedEl.value;
     sizeV.textContent=size.value;
     // 글자 크기 바를 움직이면 입력 칸이 바로 같은 크기로 바뀐다
