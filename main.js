@@ -1,159 +1,175 @@
-// 스탠드업 프롬프터: 대본 색칠 + 시간 맞춤 자동 스크롤
+// 스탠드업 프롬프터: 볼드체·괄호 색칠 + 속도 조절 자동 스크롤
 (function(){
   const $ = id => document.getElementById(id);
-  const src=$('src'), min=$('min'), sec=$('sec'), size=$('size'), sizeV=$('sizeV'),
-        auto=$('auto'), mirror=$('mirror'), countdown=$('countdown');
-  const stage=$('stage'), scroller=$('scroller'), guide=$('guide'), bar=$('bar'),
-        hud=$('hud'), timeEl=$('time'), playBtn=$('playBtn'), countEl=$('count');
+  const src=$('src'), speedEl=$('speed'), speedV=$('speedV'), size=$('size'), sizeV=$('sizeV');
+  const stage=$('stage'), scroller=$('scroller'), playBtn=$('playBtn'), toast=$('toast');
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // ---- 입력 칸 내용 → 줄 목록 (각 줄은 글자 조각과 볼드 여부) ----
+  const BLOCK=/^(DIV|P|LI|UL|OL|H[1-6]|TR|TABLE|BLOCKQUOTE|PRE|SECTION|ARTICLE)$/;
+  const SKIP=/^(STYLE|SCRIPT|META|TITLE|HEAD|LINK)$/;
+  function isBold(el){
+    const cs=getComputedStyle(el), w=cs.fontWeight;
+    return w==='bold'||parseInt(w,10)>=600||/bold/i.test(cs.fontFamily);
+  }
+  function readLines(root){
+    const lines=[[]];
+    const cur=()=>lines[lines.length-1];
+    function add(text,bold){
+      // 아이폰 메모의 특수 줄바꿈도 줄바꿈으로 본다
+      text.replace(/\r\n?/g,'\n').split(/[\n\u2028\u2029]/).forEach((p,i)=>{
+        if(i)lines.push([]);
+        p=p.replace(/\u00a0/g,' ').replace(/[\ufffc\u200b\ufeff]/g,'');
+        if(!p)return;
+        const l=cur(), last=l[l.length-1];
+        if(last&&last.b===bold)last.t+=p; else l.push({t:p,b:bold});
+      });
+    }
+    function walk(node){
+      node.childNodes.forEach(n=>{
+        if(n.nodeType===3){
+          // 태그 사이 들여쓰기 줄바꿈은 글자가 아니다
+          if(/^\s*\n\s*$/.test(n.nodeValue)&&n.parentNode!==root&&[...n.parentNode.children].some(c=>BLOCK.test(c.tagName)))return;
+          add(n.nodeValue,n.parentNode===root?false:isBold(n.parentNode));
+        }else if(n.nodeType===1&&!SKIP.test(n.tagName)){
+          if(n.tagName==='BR'){lines.push([]);return;}
+          const block=BLOCK.test(n.tagName);
+          if(block&&cur().length)lines.push([]);
+          walk(n);
+          if(block&&cur().length)lines.push([]);
+        }
+      });
+    }
+    walk(root);
+    while(lines.length&&!lines[lines.length-1].length)lines.pop();
+    while(lines.length&&!lines[0].length)lines.shift();
+    return lines;
+  }
+  // 입력 칸에는 줄과 볼드만 남긴다 (붙여넣은 글자색·크기는 버린다)
+  function editorHTML(lines){
+    return lines.map(l=>'<div>'+(l.length?l.map(r=>r.b?`<b>${esc(r.t)}</b>`:esc(r.t)).join(''):'<br>')+'</div>').join('');
+  }
+  // 재생 화면: 볼드체는 노랑, 괄호 글씨는 진한 회색
+  function paint(t){return esc(t).replace(/(\([^)]*\)|（[^）]*）)/g,'<span class="pause">$1</span>');}
+  function stageHTML(lines){
+    return lines.map(l=>l.length
+      ?'<p class="ln">'+l.map(r=>r.b?`<b>${paint(r.t)}</b>`:paint(r.t)).join('')+'</p>'
+      :'<p class="ln gap"></p>').join('');
+  }
 
   // ---- 저장 (이 브라우저에만) ----
-  const KEY='standup-prompter-v1';
+  const KEY='standup-prompter-v2', OLD='standup-prompter-v1';
   function save(){
-    try{localStorage.setItem(KEY,JSON.stringify({t:src.value,m:min.value,s:sec.value,z:size.value,
-      a:auto.checked,r:mirror.checked,c:countdown.checked}))}catch(e){}
+    try{localStorage.setItem(KEY,JSON.stringify({h:editorHTML(readLines(src)),v:speedEl.value,z:size.value}))}catch(e){}
+  }
+  function refresh(){
+    const lines=readLines(src);
+    const chars=lines.reduce((n,l)=>n+l.reduce((m,r)=>m+r.t.replace(/\s/g,'').length,0),0);
+    let blocks=0;
+    lines.forEach((l,i)=>{if(l.length&&(i===0||!lines[i-1].length))blocks++;});
+    src.classList.toggle('empty',!chars);
+    $('stat').textContent=chars?`코너 ${blocks}개 · ${chars}자`:'';
+    speedV.textContent=speedEl.value;
+    sizeV.textContent=size.value;
   }
   try{
     const d=JSON.parse(localStorage.getItem(KEY)||'null');
-    if(d){src.value=d.t||'';min.value=d.m??5;sec.value=d.s??0;size.value=d.z||38;
-      auto.checked=d.a!==false;mirror.checked=!!d.r;countdown.checked=d.c!==false;}
+    if(d){src.innerHTML=d.h||'';speedEl.value=d.v||5;size.value=d.z||38;}
+    else{
+      // 이전 버전에 저장한 대본 가져오기
+      const o=JSON.parse(localStorage.getItem(OLD)||'null');
+      if(o){src.innerHTML=editorHTML((o.t||'').split('\n').map(t=>t?[{t,b:false}]:[]));size.value=o.z||38;}
+    }
   }catch(e){}
-  sizeV.textContent=size.value;
+  refresh();
 
-  function updateStat(){
-    const t=src.value.trim();
-    const chars=t.replace(/\s/g,'').length;
-    const blocks=t?t.split(/\n\s*\n/).filter(b=>b.trim()).length:0;
-    $('stat').textContent=t?`코너 ${blocks}개 · ${chars}자`:'';
-  }
-  updateStat();
-  [src,min,sec,size,auto,mirror,countdown].forEach(el=>el.addEventListener('input',()=>{
-    sizeV.textContent=size.value;updateStat();save();
-  }));
-  $('clearBtn').onclick=()=>{src.value='';updateStat();save();src.focus();};
-
-  // ---- 대본 → 색칠된 HTML ----
-  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  function inline(s){
-    let h=esc(s);
-    h=h.replace(/!!(.+?)!!/g,'<span class="p">$1</span>');
-    h=h.replace(/(\([^)]*\)|（[^）]*）)/g,'<span class="pause">$1</span>');
-    return h;
-  }
-  function render(){
-    const blocks=src.value.replace(/\r/g,'').split(/\n\s*\n/).map(b=>b.split('\n').map(l=>l.trim()).filter(Boolean)).filter(b=>b.length);
-    let html='';
-    blocks.forEach(lines=>{
-      html+='<div class="blk">';
-      lines.forEach((l,i)=>{
-        let cls='ln';
-        let text=l;
-        const isTitle=/^##/.test(l);
-        const hasPunch=/!!.+?!!/.test(l);
-        const onlyPause=/^(\([^)]*\)|（[^）]*）)$/.test(l);
-        if(isTitle){cls+=' title';text=l.replace(/^##\s*/,'');}
-        else if(/^!!.+!!$/.test(l)){cls+=' punch';text=l.slice(2,-2);}
-        else if(!hasPunch && !onlyPause && auto.checked && lines.length>1){
-          // 자동 색칠: 기호 없는 줄만
-          const realLines=lines.filter(x=>!/^(\([^)]*\)|（[^）]*）)$/.test(x));
-          const first=realLines[0], last=realLines[realLines.length-1];
-          const titleFirst=/^##/.test(lines[0]);
-          if(l===last && realLines.length>1) cls+=' punch';
-          else if(l===first && !titleFirst) cls+=' in';
-          else if(titleFirst && l===realLines[1] && realLines.length>2) cls+=' in';
-        }
-        html+=`<p class="${cls}">${inline(text)}</p>`;
-      });
-      html+='</div>';
-    });
-    return html;
-  }
+  src.addEventListener('input',()=>{refresh();save();});
+  [speedEl,size].forEach(el=>el.addEventListener('input',()=>{refresh();save();}));
+  src.addEventListener('paste',()=>{
+    // 브라우저가 서식째 붙여넣은 뒤에 읽어서 볼드체를 놓치지 않는다
+    setTimeout(()=>{
+      src.innerHTML=editorHTML(readLines(src));
+      const r=document.createRange();r.selectNodeContents(src);r.collapse(false);
+      const s=getSelection();s.removeAllRanges();s.addRange(r);
+      refresh();save();
+    },0);
+  });
+  $('clearBtn').onclick=()=>{src.innerHTML='';refresh();save();src.focus();};
 
   // ---- 재생 ----
-  let duration=300, elapsed=0, rate=1, playing=false, last=0, raf=0, distance=0, guideY=0, hudTimer=0;
+  let y=0, playing=false, last=0, raf=0, distance=0, toastTimer=0;
 
+  // 속도 숫자는 대략 초당 글자 수라서 글자 크기를 바꿔도 읽는 빠르기가 비슷하다
+  function pxPerSec(){
+    const z=+size.value;
+    return +speedEl.value*1.45*z*z/(window.innerWidth*0.88);
+  }
   function layout(){
-    const vh=window.innerHeight;
-    guideY=Math.round(vh*0.33);
-    guide.style.top=guideY+'px';
+    const vh=window.innerHeight, top=Math.round(vh*0.33);
     scroller.style.fontSize=size.value+'px';
-    scroller.style.paddingTop=guideY+'px';
-    scroller.style.paddingBottom=(vh-guideY)+'px';
+    scroller.style.paddingTop=top+'px';
+    scroller.style.paddingBottom=(vh-top)+'px';
     distance=Math.max(1,scroller.scrollHeight-vh);
+    y=Math.min(y,distance);
     apply();
   }
-  function apply(){
-    const p=Math.min(1,elapsed/duration);
-    const y=-p*distance;
-    scroller.style.transform=`translateY(${y}px)`+(mirror.checked?' scaleX(-1)':'');
-    bar.style.width=(p*100)+'%';
-    const f=s=>{s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
-    timeEl.textContent=`${f(elapsed)} / ${f(duration)}`+(rate!==1?` ×${rate.toFixed(1)}`:'');
-  }
+  function apply(){scroller.style.transform=`translateY(${-y}px)`;}
   function tick(ts){
     if(!playing)return;
-    const dt=(ts-last)/1000;last=ts;
-    elapsed+=dt*rate;
-    if(elapsed>=duration){elapsed=duration;apply();pause();showHud(true);return;}
+    // 다른 앱에 다녀와도 대본이 튀지 않게 한 번에 움직이는 시간을 제한한다
+    const dt=Math.min(0.1,Math.max(0,(ts-last)/1000));last=ts;
+    y+=pxPerSec()*dt;
+    if(y>=distance){y=distance;apply();pause();return;}
     apply();
     raf=requestAnimationFrame(tick);
   }
   function play(){
-    if(elapsed>=duration)elapsed=0;
+    if(y>=distance)y=0;
     playing=true;playBtn.textContent='⏸';last=performance.now();
     cancelAnimationFrame(raf);raf=requestAnimationFrame(tick);
-    showHud(false);
   }
-  function pause(){playing=false;playBtn.textContent='▶';cancelAnimationFrame(raf);showHud(true);}
+  function pause(){playing=false;playBtn.textContent='▶';cancelAnimationFrame(raf);}
   function toggle(){playing?pause():play();}
-  function showHud(stay){
-    hud.classList.remove('hide');clearTimeout(hudTimer);
-    if(!stay)hudTimer=setTimeout(()=>{if(playing)hud.classList.add('hide')},2500);
-  }
-
-  function runCountdown(done){
-    if(!countdown.checked){done();return;}
-    let n=3;countEl.style.display='flex';countEl.textContent=n;
-    const iv=setInterval(()=>{
-      n--; if(n<=0){clearInterval(iv);countEl.style.display='none';done();}
-      else countEl.textContent=n;
-    },1000);
+  function changeSpeed(d){
+    speedEl.value=Math.min(15,Math.max(1,+speedEl.value+d));
+    refresh();save();
+    toast.textContent='속도 '+speedEl.value;toast.classList.add('show');
+    clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),900);
   }
 
   $('startBtn').onclick=()=>{
-    if(!src.value.trim()){src.focus();return;}
-    duration=Math.max(5,(parseInt(min.value)||0)*60+(parseInt(sec.value)||0));
-    elapsed=0;rate=1;
-    scroller.innerHTML=render();
+    const lines=readLines(src);
+    if(!lines.length){src.focus();return;}
+    y=0;
+    scroller.innerHTML=stageHTML(lines);
     stage.classList.add('on');document.body.style.overflow='hidden';
     layout();
-    pause();
-    runCountdown(play);
+    play();
   };
   $('backBtn').onclick=e=>{e.stopPropagation();pause();stage.classList.remove('on');document.body.style.overflow='';};
-  $('restartBtn').onclick=e=>{e.stopPropagation();pause();elapsed=0;apply();runCountdown(play);};
-  $('slowBtn').onclick=e=>{e.stopPropagation();rate=Math.max(0.5,+(rate-0.1).toFixed(1));apply();showHud(!playing);};
-  $('fastBtn').onclick=e=>{e.stopPropagation();rate=Math.min(2,+(rate+0.1).toFixed(1));apply();showHud(!playing);};
+  $('slowBtn').onclick=e=>{e.stopPropagation();changeSpeed(-0.5);};
+  $('fastBtn').onclick=e=>{e.stopPropagation();changeSpeed(0.5);};
   playBtn.onclick=e=>{e.stopPropagation();toggle();};
-  hud.addEventListener('click',e=>e.stopPropagation());
-  stage.addEventListener('click',()=>{ if(countEl.style.display==='flex')return; toggle(); });
+  $('hud').addEventListener('click',e=>e.stopPropagation());
+  stage.addEventListener('click',toggle);
 
-  // 손가락으로 위치 조정 (일시정지 상태에서 위아래로 끌기)
-  let dragY=null,dragE=0,moved=false;
-  stage.addEventListener('touchstart',e=>{if(e.target.closest('#hud'))return;dragY=e.touches[0].clientY;dragE=elapsed;moved=false;},{passive:true});
+  // 손가락으로 위아래로 끌어 위치 조정
+  let dragY=null,dragStart=0,moved=false;
+  stage.addEventListener('touchstart',e=>{if(e.target.closest('#hud'))return;dragY=e.touches[0].clientY;dragStart=y;moved=false;},{passive:true});
   stage.addEventListener('touchmove',e=>{
     if(dragY===null)return;
     const dy=e.touches[0].clientY-dragY;
-    if(Math.abs(dy)>8){moved=true; if(playing)pause();}
-    if(moved){elapsed=Math.min(duration,Math.max(0,dragE-dy/distance*duration));apply();}
+    if(Math.abs(dy)>8){moved=true;if(playing)pause();}
+    if(moved){y=Math.min(distance,Math.max(0,dragStart-dy));apply();}
   },{passive:true});
-  stage.addEventListener('touchend',e=>{ if(moved){e.preventDefault();} dragY=null; });
+  stage.addEventListener('touchend',e=>{if(moved)e.preventDefault();dragY=null;});
 
   document.addEventListener('keydown',e=>{
     if(!stage.classList.contains('on'))return;
     if(e.code==='Space'){e.preventDefault();toggle();}
-    if(e.key==='ArrowUp'){rate=Math.min(2,+(rate+0.1).toFixed(1));apply();}
-    if(e.key==='ArrowDown'){rate=Math.max(0.5,+(rate-0.1).toFixed(1));apply();}
-    if(e.key==='Escape'){$('backBtn').click();}
+    if(e.key==='ArrowUp')changeSpeed(0.5);
+    if(e.key==='ArrowDown')changeSpeed(-0.5);
+    if(e.key==='Escape')$('backBtn').click();
   });
   window.addEventListener('resize',()=>{if(stage.classList.contains('on'))layout();});
 })();
