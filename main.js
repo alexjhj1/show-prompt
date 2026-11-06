@@ -120,16 +120,24 @@
   }
   speedEl.addEventListener('input',preview);
 
+  // 메모 앱 기본 글자 크기로 되돌리기
+  $('sizeReset').onclick=()=>{size.value=17;refresh();save();};
   $('clearBtn').onclick=()=>{src.innerHTML='';refresh();save();src.focus();};
 
   // ---- 재생 ----
+  // 재생·일시정지 아이콘
+  const ICON={
+    play:'<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>',
+    pause:'<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z"/></svg>'
+  };
+  function showIcon(name){playBtn.innerHTML=ICON[name];playBtn.dataset.icon=name;}
+  showIcon('pause');
   let y=0, playing=false, last=0, raf=0, distance=0, toastTimer=0;
 
-  // 속도 1~10: 한 단계마다 약 1.36배씩 빨라져 1은 초당 0.5줄, 10은 초당 8줄이다
-  // 줄 수 기준이라 글자 크기를 바꿔도 줄이 지나가는 빠르기는 같다
+  // 속도 1~10: 한 단계마다 약 1.36배씩 빨라져 1은 초당 약 0.7줄, 10은 약 11줄이다
+  // 글자 크기에 비례해서 글자 크기를 바꿔도 줄이 지나가는 빠르기는 같다
   function pxPerSec(){
-    const linesPerSec=0.5*Math.pow(16,(+speedEl.value-1)/9);
-    return linesPerSec*1.8*(+size.value); // 한 줄 높이 = 줄 간격 1.45 + 줄 사이 .35
+    return 0.9*Math.pow(16,(+speedEl.value-1)/9)*(+size.value);
   }
   function layout(){
     const vh=window.innerHeight, top=Math.round(vh*0.33);
@@ -152,10 +160,10 @@
   }
   function play(){
     if(y>=distance)y=0;
-    playing=true;playBtn.textContent='⏸';last=performance.now();
+    playing=true;showIcon('pause');last=performance.now();
     cancelAnimationFrame(raf);raf=requestAnimationFrame(tick);
   }
-  function pause(){playing=false;playBtn.textContent='▶';cancelAnimationFrame(raf);}
+  function pause(){playing=false;showIcon('play');cancelAnimationFrame(raf);}
   function toggle(){playing?pause():play();}
   function changeSpeed(d){
     speedEl.value=+speedEl.value+d;
@@ -189,20 +197,21 @@
   },{passive:false});
   stage.addEventListener('click',toggle);
 
-  // 손가락으로 위아래로 끌면 위치 조정, 끌지 않고 탭하면 재생·일시정지
-  let dragY=null,dragStart=0,moved=false;
-  stage.addEventListener('touchstart',e=>{dragY=e.touches[0].clientY;dragStart=y;moved=false;},{passive:true});
+  // 끌면 재생을 멈추지 않고 위치만 옮기고, 끌지 않고 탭하면 재생·일시정지
+  let lastY=null,startY=0,moved=false;
+  stage.addEventListener('touchstart',e=>{lastY=startY=e.touches[0].clientY;moved=false;},{passive:true});
   stage.addEventListener('touchmove',e=>{
-    if(dragY===null)return;
-    const dy=e.touches[0].clientY-dragY;
-    if(Math.abs(dy)>8){moved=true;if(playing)pause();}
-    if(moved){y=Math.min(distance,Math.max(0,dragStart-dy));apply();}
+    if(lastY===null)return;
+    const cy=e.touches[0].clientY;
+    if(Math.abs(cy-startY)>8)moved=true;
+    if(moved){y=Math.min(distance,Math.max(0,y-(cy-lastY)));apply();}
+    lastY=cy;
   },{passive:true});
   stage.addEventListener('touchend',e=>{
-    if(dragY===null)return;
+    if(lastY===null)return;
     e.preventDefault();
     if(!moved)toggle();
-    dragY=null;moved=false;
+    lastY=null;moved=false;
   });
 
   document.addEventListener('keydown',e=>{

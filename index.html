@@ -26,10 +26,10 @@
 
   <div class="card">
     <label class="slider">속도 <input type="range" id="speed" min="1" max="10" step="1" value="5"> <span id="speedV" class="stat">5</span></label>
-    <label class="slider marked">글자 크기 <span class="track"><input type="range" id="size" min="12" max="40" value="17"><span class="mark">▲ 메모 기본</span></span> <span id="sizeV" class="stat">17</span></label>
+    <div class="slider">크기 <input type="range" id="size" min="12" max="40" value="17" aria-label="글자 크기"> <span id="sizeV" class="stat">17</span> <button class="btn mini" id="sizeReset" type="button">기본</button></div>
   </div>
 
-  <button class="btn primary" id="startBtn">▶ 시작</button>
+  <button class="btn primary" id="startBtn"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg> 시작</button>
   </div>
 </section>
 
@@ -40,7 +40,7 @@
   <div id="hud">
     <button class="btn" id="backBtn" aria-label="닫기">✕</button>
     <button class="btn big" id="slowBtn" aria-label="느리게">−</button>
-    <button class="btn big" id="playBtn" aria-label="재생 또는 일시정지">⏸</button>
+    <button class="btn big" id="playBtn" aria-label="재생 또는 일시정지"></button>
     <button class="btn big" id="fastBtn" aria-label="빠르게">+</button>
   </div>
 </section>
