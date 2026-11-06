@@ -20,16 +20,28 @@
   <div id="src" class="empty" contenteditable="true" data-placeholder="대본을 붙여넣으세요" role="textbox" aria-multiline="true" aria-label="대본"></div>
   <div id="opts">
   <div class="row">
-    <button class="btn" id="clearBtn">지우기</button>
+    <button class="btn key" id="clearBtn">지우기</button>
     <span class="stat" id="stat"></span>
   </div>
 
+  <input type="hidden" id="speed" value="9">
+  <input type="hidden" id="size" value="17">
   <div class="card">
-    <div class="slider">속도 <input type="range" id="speed" min="1" max="19" step="1" value="9" aria-label="속도"> <span id="speedV" class="stat">9</span> <button class="btn mini" id="speedReset" type="button">기본</button></div>
-    <div class="slider">크기 <input type="range" id="size" min="12" max="40" value="17" aria-label="글자 크기"> <span id="sizeV" class="stat">17</span> <button class="btn mini" id="sizeReset" type="button">기본</button></div>
+    <div class="slider"><span class="lab">속도</span>
+      <button class="btn key step" id="speedDown" type="button" aria-label="느리게">−</button>
+      <span id="speedV" class="val">9</span>
+      <button class="btn key step" id="speedUp" type="button" aria-label="빠르게">+</button>
+      <button class="btn key mini" id="speedReset" type="button">기본</button>
+    </div>
+    <div class="slider"><span class="lab">크기</span>
+      <button class="btn key step" id="sizeDown" type="button" aria-label="글자 작게">−</button>
+      <span id="sizeV" class="val">17</span>
+      <button class="btn key step" id="sizeUp" type="button" aria-label="글자 크게">+</button>
+      <button class="btn key mini" id="sizeReset" type="button">기본</button>
+    </div>
   </div>
 
-  <button class="btn primary" id="startBtn"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg> 시작</button>
+  <button class="btn key primary" id="startBtn"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg> 시작</button>
   </div>
 </section>
 
@@ -38,10 +50,10 @@
   <div id="fadeT"></div><div id="fadeB"></div>
   <div id="toast"></div>
   <div id="hud">
-    <button class="btn" id="backBtn" aria-label="닫기">✕</button>
-    <button class="btn big" id="slowBtn" aria-label="느리게">−</button>
-    <button class="btn big" id="playBtn" aria-label="재생 또는 일시정지"></button>
-    <button class="btn big" id="fastBtn" aria-label="빠르게">+</button>
+    <button class="btn key" id="backBtn" aria-label="닫기">✕</button>
+    <button class="btn key big" id="slowBtn" aria-label="느리게">−</button>
+    <button class="btn key big" id="playBtn" aria-label="재생 또는 일시정지"></button>
+    <button class="btn key big" id="fastBtn" aria-label="빠르게">+</button>
   </div>
 </section>
 

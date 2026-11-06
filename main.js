@@ -58,7 +58,7 @@
   // ---- 저장 (이 브라우저에만) ----
   const KEY='standup-prompter-v2', OLD='standup-prompter-v1';
   // 기본값을 바꾸면 이 번호를 올린다. 예전 기본값으로 저장된 속도·크기는 새 기본값으로 시작한다
-  const DEFAULTS=4;
+  const DEFAULTS=5;
   function save(){
     try{localStorage.setItem(KEY,JSON.stringify({h:render(readLines(src)),v:speedEl.value,z:size.value,n:DEFAULTS}))}catch(e){}
   }
@@ -81,7 +81,10 @@
   }
   try{
     const d=JSON.parse(localStorage.getItem(KEY)||'null');
-    if(d){src.innerHTML=d.h||'';src.innerHTML=render(readLines(src));if(d.n>=2)size.value=d.z;if(d.n===3)speedEl.value=d.v*2-1;if(d.n===DEFAULTS)speedEl.value=d.v;}
+    if(d){src.innerHTML=d.h||'';src.innerHTML=render(readLines(src));if(d.n>=2)size.value=Math.min(40,Math.max(12,+d.z));
+      // 예전 단계로 저장된 속도는 같은 빠르기의 새 숫자로 바꾼다
+      if(d.n===3||d.n===4){const v=d.n===3?d.v*2-1:+d.v;speedEl.value=Math.min(10,Math.round(5+(v-1)*5/9));}
+      if(d.n===DEFAULTS)speedEl.value=d.v;}
     else{
       // 이전 버전에 저장한 대본 가져오기
       const o=JSON.parse(localStorage.getItem(OLD)||'null');
@@ -91,7 +94,6 @@
   refresh();
 
   src.addEventListener('input',()=>{refresh();save();});
-  [speedEl,size].forEach(el=>el.addEventListener('input',()=>{refresh();save();}));
   src.addEventListener('paste',()=>{
     // 브라우저가 서식째 붙여넣은 뒤에 읽어서 볼드체를 놓치지 않는다
     setTimeout(()=>{
@@ -123,15 +125,50 @@
     pvEnd=performance.now()+3000;
     if(!pv){pvY=src.scrollTop;pvLast=performance.now();pv=requestAnimationFrame(previewTick);}
   }
-  speedEl.addEventListener('input',preview);
+
+  // 값을 한 칸 바꾸기
+  function step(el,d,lo,hi){el.value=Math.min(hi,Math.max(lo,+el.value+d));refresh();save();}
+  // 누르는 순간 바뀌고, 계속 누르고 있으면 연속으로 바뀐다
+  function hold(btn,fn){
+    let wait=0,rep=0;
+    const stop=()=>{clearTimeout(wait);clearInterval(rep);};
+    btn.addEventListener('pointerdown',e=>{
+      e.preventDefault();fn();
+      wait=setTimeout(()=>{rep=setInterval(fn,110);},400);
+    });
+    ['pointerup','pointercancel','pointerleave'].forEach(t=>btn.addEventListener(t,stop));
+    btn.addEventListener('click',e=>{if(e.detail===0)fn();});
+  }
+  hold($('speedDown'),()=>{step(speedEl,-1,1,10);preview();});
+  hold($('speedUp'),()=>{step(speedEl,1,1,10);preview();});
+  hold($('sizeDown'),()=>step(size,-1,12,40));
+  hold($('sizeUp'),()=>step(size,1,12,40));
+
+  // 누름 손맛: 눌린 모습을 아주 짧은 터치에도 0.06초는 보여 준다
+  let downEl=null,downAt=0;
+  function liftKey(){
+    const el=downEl;downEl=null;
+    if(!el)return;
+    const wait=60-(performance.now()-downAt);
+    if(wait<=0)el.classList.remove('is-down');
+    else setTimeout(()=>el.classList.remove('is-down'),wait);
+  }
+  document.addEventListener('pointerdown',e=>{
+    const el=e.target.closest&&e.target.closest('.key');
+    if(!el)return;
+    liftKey();
+    downEl=el;downAt=performance.now();
+    el.classList.add('is-down');
+  },true);
+  ['pointerup','pointercancel','touchend','touchcancel'].forEach(t=>document.addEventListener(t,liftKey,true));
 
   // 기본 속도로 되돌리기
   $('speedReset').onclick=()=>{speedEl.value=9;refresh();save();preview();};
   // 메모 앱 기본 글자 크기로 되돌리기
   $('sizeReset').onclick=()=>{size.value=17;refresh();save();};
-  // 옵션 영역은 끌어도 움직이지 않는다 (슬라이더만 예외)
+  // 옵션 영역은 끌어도 움직이지 않는다
   const opts=$('opts');
-  opts.addEventListener('touchmove',e=>{if(e.target.type!=='range')e.preventDefault();},{passive:false});
+  opts.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
   // 옵션을 누르면 키보드를 내린다
   opts.addEventListener('touchstart',()=>{if(document.activeElement===src)src.blur();},{passive:true});
   // 화면 높이 맞추기
@@ -163,10 +200,10 @@
   showIcon('pause');
   let y=0, playing=false, last=0, raf=0, distance=0, toastTimer=0;
 
-  // 속도 1~19: 한 단계마다 약 1.17배씩 빨라져 1은 초당 약 0.7줄, 19는 약 11줄이다
+  // 속도 1~10: 한 단계마다 약 1.32배씩 빨라진다. 5가 예전 속도 1, 10이 예전 속도 10이다
   // 글자 크기에 비례해서 글자 크기를 바꿔도 줄이 지나가는 빠르기는 같다
   function pxPerSec(){
-    return 0.9*Math.pow(16,(+speedEl.value-1)/18)*(+size.value);
+    return 0.9*Math.pow(4,(+speedEl.value-5)/5)*(+size.value);
   }
   function layout(){
     const vh=stage.clientHeight, top=Math.round(vh*0.33);
@@ -195,8 +232,7 @@
   function pause(){playing=false;showIcon('play');cancelAnimationFrame(raf);}
   function toggle(){playing?pause():play();}
   function changeSpeed(d){
-    speedEl.value=+speedEl.value+d;
-    refresh();save();
+    step(speedEl,d,1,10);
     toast.textContent='속도 '+speedEl.value;toast.classList.add('show');
     clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),900);
   }
