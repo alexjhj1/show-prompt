@@ -55,6 +55,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 .ln b,#src b,#src strong{font-weight:700;color:var(--yellow)}
 .ln u,#src u,.ln u b,#src u b{color:var(--red);text-decoration:none}
 .ln .pause,#src .pause{color:var(--gray);font-weight:400}
+/* 이모지와 기호는 볼드·밑줄 안에서도 흰색 */
+.ln .plain,#src .plain{color:var(--text);font-weight:400}
+.ln .pause .plain,#src .pause .plain{color:inherit}
 #fadeT,#fadeB{position:absolute;left:0;right:0;pointer-events:none}
 #fadeT{top:0;height:18%;background:linear-gradient(#000,transparent)}
 #fadeB{bottom:0;height:18%;background:linear-gradient(transparent,#000)}

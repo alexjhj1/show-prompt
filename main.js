@@ -9,20 +9,22 @@
   const BLOCK=/^(DIV|P|LI|UL|OL|H[1-6]|TR|TABLE|BLOCKQUOTE|PRE|SECTION|ARTICLE)$/;
   const SKIP=/^(STYLE|SCRIPT|META|TITLE|HEAD|LINK)$/;
   function isBold(el){
+    // 제목 태그는 원래 굵게 나오므로 볼드로 치지 않는다
+    if(el.closest('h1,h2,h3,h4,h5,h6'))return false;
     const cs=getComputedStyle(el), w=cs.fontWeight;
     return w==='bold'||parseInt(w,10)>=600||/bold/i.test(cs.fontFamily);
   }
   function readLines(root){
     const lines=[[]];
     const cur=()=>lines[lines.length-1];
-    function add(text,bold,under){
+    function add(text,bold,under,size){
       // 아이폰 메모의 특수 줄바꿈도 줄바꿈으로 본다
       text.replace(/\r\n?/g,'\n').split(/[\n\u2028\u2029]/).forEach((p,i)=>{
         if(i)lines.push([]);
         p=p.replace(/\u00a0/g,' ').replace(/[\ufffc\u200b\ufeff]/g,'');
         if(!p)return;
         const l=cur(), last=l[l.length-1];
-        if(last&&last.b===bold&&last.u===under)last.t+=p; else l.push({t:p,b:bold,u:under});
+        if(last&&last.b===bold&&last.u===under&&last.z===size)last.t+=p; else l.push({t:p,b:bold,u:under,z:size});
       });
     }
     function walk(node,under){
@@ -32,8 +34,8 @@
           if(/^\s*\n\s*$/.test(n.nodeValue)&&n.parentNode!==root&&[...n.parentNode.children].some(c=>BLOCK.test(c.tagName)))return;
           // 괄호 색칠용 칸은 굵기 판단에서 건너뛴다
           let el=n.parentNode;
-          while(el!==root&&el.classList.contains('pause'))el=el.parentNode;
-          add(n.nodeValue,el===root?false:isBold(el),under);
+          while(el!==root&&/pause|plain/.test(el.className))el=el.parentNode;
+          add(n.nodeValue,el===root?false:isBold(el),under,parseFloat(getComputedStyle(el).fontSize));
         }else if(n.nodeType===1&&!SKIP.test(n.tagName)){
           if(n.tagName==='BR'){lines.push([]);return;}
           const block=BLOCK.test(n.tagName);
@@ -47,12 +49,34 @@
     walk(root,false);
     while(lines.length&&!lines[lines.length-1].length)lines.pop();
     while(lines.length&&!lines[0].length)lines.shift();
+    plainTitles(lines);
     return lines;
   }
+  // 본문보다 큰 글씨는 메모의 제목이다. 볼드·밑줄로 치지 않고 일반 글씨로 둔다
+  function plainTitles(lines){
+    const by={};
+    lines.flat().forEach(r=>{by[r.z]=(by[r.z]||0)+r.t.length;});
+    const body=+Object.keys(by).sort((a,b)=>by[b]-by[a])[0];
+    lines.forEach((l,i)=>{
+      const out=[];
+      l.forEach(r=>{
+        if(r.z>body*1.15){r.b=false;r.u=false;}
+        r.z=body;
+        const last=out[out.length-1];
+        if(last&&last.b===r.b&&last.u===r.u)last.t+=r.t; else out.push(r);
+      });
+      lines[i]=out;
+    });
+  }
   // 입력 칸과 재생 화면이 같은 모양을 쓴다
-  // 볼드 = 잽(노랑), 밑줄 = 펀치(빨강), 둘 다 있으면 펀치, 괄호 글씨 = 진한 회색
+  // 볼드 = 잽(노랑), 밑줄 = 펀치(빨강), 둘 다 있으면 펀치, 괄호 글씨 = 진한 회색, 나머지는 모두 흰색
   // 붙여넣은 글자색·크기는 버리고 줄과 볼드·밑줄만 남긴다
-  function paint(t){return esc(t).replace(/(\([^)]*\)|（[^）]*）)/g,'<span class="pause">$1</span>');}
+  // 이모지와 기호는 볼드·밑줄 안에 있어도 색을 입히지 않는다
+  const SYMBOL=/(?:[0-9#*]\ufe0f?\u20e3|[\p{Extended_Pictographic}\p{So}\u2190-\u21ff\u203b][\ufe0e\ufe0f\u200d\u{1f3fb}-\u{1f3ff}]*)+/gu;
+  function paint(t){
+    return esc(t).replace(/(\([^)]*\)|（[^）]*）)/g,'<span class="pause">$1</span>')
+      .replace(SYMBOL,'<span class="plain">$&</span>');
+  }
   function render(lines){
     return lines.map(l=>'<div class="ln">'+(l.length?l.map(r=>{
       const t=paint(r.t);
@@ -74,7 +98,7 @@
     // 괄호 안 글자(회색)는 말하지 않는 지시문이라 글자 수에서 뺀다
     const chars=lineText.reduce((n,t)=>n+t.replace(/\([^)]*\)|（[^）]*）/g,'').replace(/\s/g,'').length,0);
     // 표시된 한 덩어리를 하나로 센다
-    const count=f=>lines.reduce((n,l)=>n+l.filter(r=>f(r)&&r.t.trim()).length,0);
+    const count=f=>lines.reduce((n,l)=>n+l.filter(r=>f(r)&&r.t.replace(SYMBOL,'').trim()).length,0);
     const jab=count(r=>r.b&&!r.u), punch=count(r=>r.u);
     src.classList.toggle('empty',!hasText);
     $('stat').innerHTML=hasText?`${chars.toLocaleString()}자 · <span class="y">잽 ${jab}</span> · <span class="r">펀치 ${punch}</span>`:'';
