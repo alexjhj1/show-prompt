@@ -262,7 +262,8 @@
   window.addEventListener('pageshow',fit);
   document.addEventListener('visibilitychange',fit);
   src.addEventListener('blur',fit);
-  $('clearBtn').onclick=()=>{src.innerHTML='';refresh();save();src.focus();};
+  // 지운 뒤에는 키보드를 올리지 않고 안내 문구가 보이게 둔다
+  $('clearBtn').onclick=()=>{src.innerHTML='';refresh();save();src.blur();};
 
   // ---- 재생 ----
   // 재생·일시정지 아이콘
