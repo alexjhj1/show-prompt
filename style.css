@@ -42,6 +42,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 #stat{font-size:15px;color:var(--text);font-weight:600;white-space:nowrap}
 #stat .y{color:var(--yellow)}
 #stat .r{color:var(--red)}
+/* 대본 읽어 주기 */
+#readBtn{flex:1;min-width:0;height:44px;padding:0;font-size:15px;font-weight:600}
+#voice{flex:1;min-width:0;height:44px;padding:0 8px;background:#232328;color:var(--text);border:1px solid var(--line);border-radius:10px;font:inherit;font-size:16px}
 .btn.mini{height:44px;padding:0 12px;font-size:14px;flex:none}
 #clearBtn,#pasteBtn{flex:none;padding:6px 12px;font-size:14px}
 /* 재생·일시정지 아이콘: 이모티콘으로 바뀌지 않게 그림으로 그린다 */

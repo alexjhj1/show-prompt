@@ -74,6 +74,7 @@
   // 볼드 = 잽(노랑), 밑줄 = 펀치(빨강), 둘 다 있으면 펀치, 괄호 글씨 = 진한 회색, 나머지는 모두 흰색
   // 붙여넣은 글자색·크기는 버리고 줄과 볼드·밑줄만 남긴다
   // 이모지와 기호는 볼드·밑줄 안에 있어도 색을 입히지 않는다
+  const PAREN=/\([^)]*\)|（[^）]*）/g;
   const SYMBOL=/(?:[0-9#*]\ufe0f?\u20e3|[\p{Extended_Pictographic}\p{So}\u2190-\u21ff\u203b][\ufe0e\ufe0f\u200d\u{1f3fb}-\u{1f3ff}]*)+/gu;
   function paint(t){
     return esc(t).replace(/(\([^)]*\)|（[^）]*）)/g,'<span class="pause">$1</span>')
@@ -100,7 +101,7 @@
     const hasText=lineText.some(t=>t.trim());
     // 말하지 않는 글자는 글자 수에서 뺀다: 제목, 괄호 안 지시문(회색), 이모지·기호
     const spoken=lines.map(l=>l.filter(r=>!r.h).map(r=>r.t).join(''));
-    const chars=spoken.reduce((n,t)=>n+t.replace(/\([^)]*\)|（[^）]*）/g,'').replace(SYMBOL,'').replace(/\s/g,'').length,0);
+    const chars=spoken.reduce((n,t)=>n+t.replace(PAREN,'').replace(SYMBOL,'').replace(/\s/g,'').length,0);
     // 표시된 한 덩어리를 하나로 센다
     const count=f=>lines.reduce((n,l)=>n+l.filter(r=>f(r)&&r.t.replace(SYMBOL,'').trim()).length,0);
     const jab=count(r=>r.b&&!r.u), punch=count(r=>r.u);
@@ -127,6 +128,7 @@
 
   src.addEventListener('input',()=>{refresh();save();});
   function afterPaste(){
+    stopRead();
     src.innerHTML=render(readLines(src));
     refresh();save();
     // 붙여넣은 뒤에는 고칠 일이 없으니 키보드를 내리고 첫 줄로 돌아간다
@@ -323,6 +325,83 @@
     layout();
     play();
   };
+  // ---- 대본 읽어 주기: 멈출 때까지 처음부터 끝까지 반복한다 ----
+  const tts=window.speechSynthesis, readBtn=$('readBtn'), voiceSel=$('voice');
+  const VOICE_KEY='standup-prompter-voice';
+  let voices=[], reading=false, turn=0, idx=0, parts=[], loopWait=0, utter=null;
+  // 고음질 음성을 앞에 두고, 장난스러운 음성은 뒤로 보낸다
+  function voiceScore(v){
+    const s=(v.voiceURI+' '+v.name).toLowerCase();
+    if(/eloquence|eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley/.test(s))return 0;
+    if(/premium|프리미엄/.test(s))return 4;
+    if(/enhanced|고품질|향상/.test(s))return 3;
+    if(/siri/.test(s))return 3;
+    return 2;
+  }
+  function voiceName(v){
+    const s=v.voiceURI.toLowerCase();
+    return v.name+(/premium/.test(s)&&!/premium/i.test(v.name)?' (프리미엄)':/enhanced/.test(s)&&!/enhanced/i.test(v.name)?' (고품질)':'');
+  }
+  function loadVoices(){
+    voices=tts.getVoices().filter(v=>/^ko/i.test(v.lang)).sort((a,b)=>voiceScore(b)-voiceScore(a));
+    let saved='';
+    try{saved=localStorage.getItem(VOICE_KEY)||'';}catch(e){}
+    voiceSel.innerHTML=voices.length?voices.map(v=>`<option value="${esc(v.voiceURI)}">${esc(voiceName(v))}</option>`).join(''):'<option value="">기본 음성</option>';
+    if(voices.some(v=>v.voiceURI===saved))voiceSel.value=saved;
+  }
+  // 제목, 괄호 안 글, 이모지·기호는 읽지 않는다. 문장마다 나눠서 읽는다
+  function readParts(){
+    const out=[];
+    readLines(src).forEach(l=>{
+      const t=l.filter(r=>!r.h).map(r=>r.t).join('').replace(PAREN,' ').replace(SYMBOL,' ').replace(/\s+/g,' ').trim();
+      t.split(/(?<=[.!?…])\s+/).forEach(p=>{if(/[\p{L}\p{N}]/u.test(p))out.push(p);});
+    });
+    return out;
+  }
+  function showRead(){readBtn.innerHTML=reading?ICON.pause+' 멈춤':ICON.play+' 재생';}
+  function speakNext(my){
+    if(my!==turn)return;
+    // 끝까지 읽으면 잠깐 쉬고 처음부터 다시 읽는다
+    if(idx>=parts.length){idx=0;loopWait=setTimeout(()=>speakNext(my),1000);return;}
+    const u=new SpeechSynthesisUtterance(parts[idx]);
+    u.lang='ko-KR';
+    const v=voices.find(x=>x.voiceURI===voiceSel.value);
+    if(v)u.voice=v;
+    u.onend=()=>{if(my===turn){idx++;speakNext(my);}};
+    u.onerror=e=>{if(my===turn&&e.error!=='canceled'&&e.error!=='interrupted')stopRead();};
+    utter=u; // 아이폰에서 읽는 도중 사라지지 않게 붙잡아 둔다
+    tts.speak(u);
+  }
+  function stopRead(){
+    if(!reading)return;
+    reading=false;turn++;clearTimeout(loopWait);tts.cancel();showRead();
+  }
+  function startRead(){
+    parts=readParts();
+    if(!parts.length){$('stat').textContent='읽을 글이 없어요';return;}
+    src.blur();
+    reading=true;turn++;idx=0;tts.cancel();showRead();
+    speakNext(turn);
+  }
+  if(tts){
+    loadVoices();
+    tts.addEventListener('voiceschanged',loadVoices);
+    showRead();
+    readBtn.onclick=()=>{reading?stopRead():startRead();};
+    voiceSel.onchange=()=>{
+      try{localStorage.setItem(VOICE_KEY,voiceSel.value);}catch(e){}
+      // 읽는 중에 바꾸면 지금 문장부터 새 목소리로 읽는다
+      if(reading){clearTimeout(loopWait);turn++;tts.cancel();speakNext(turn);}
+    };
+    // 프롬프터를 시작하거나 대본을 지우면 읽기를 멈춘다
+    $('startBtn').addEventListener('click',stopRead);
+    $('clearBtn').addEventListener('click',stopRead);
+    // 다른 앱에 다녀오면서 끊겼으면 이어서 읽는다
+    document.addEventListener('visibilitychange',()=>{
+      if(!document.hidden&&reading&&!tts.speaking){clearTimeout(loopWait);turn++;speakNext(turn);}
+    });
+  }else $('readRow').style.display='none';
+
   function close(){pause();stage.classList.remove('on');}
   const hud=$('hud');
   [['backBtn',close],['slowBtn',()=>changeSpeed(-1)],['playBtn',toggle],['fastBtn',()=>changeSpeed(1)]].forEach(([id,fn])=>{
