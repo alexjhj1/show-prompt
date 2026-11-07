@@ -344,6 +344,8 @@
   }
   function loadVoices(){
     voices=tts.getVoices().filter(v=>/^ko/i.test(v.lang)).sort((a,b)=>voiceScore(b)-voiceScore(a));
+    // 이름이 같게 보이는 음성은 좋은 것 하나만 남긴다
+    voices=voices.filter((v,i)=>voices.findIndex(x=>voiceName(x)===voiceName(v))===i);
     let saved='';
     try{saved=localStorage.getItem(VOICE_KEY)||'';}catch(e){}
     voiceSel.innerHTML=voices.length?voices.map(v=>`<option value="${esc(v.voiceURI)}">${esc(voiceName(v))}</option>`).join(''):'<option value="">기본 음성</option>';
@@ -352,18 +354,24 @@
   // 제목, 괄호 안 글, 이모지·기호는 읽지 않는다. 문장마다 나눠서 읽는다
   function readParts(){
     const out=[];
-    readLines(src).forEach(l=>{
+    readLines(src).forEach((l,line)=>{
       const t=l.filter(r=>!r.h).map(r=>r.t).join('').replace(PAREN,' ').replace(SYMBOL,' ').replace(/\s+/g,' ').trim();
-      t.split(/(?<=[.!?…])\s+/).forEach(p=>{if(/[\p{L}\p{N}]/u.test(p))out.push(p);});
+      t.split(/(?<=[.!?…])\s+/).forEach(p=>{if(/[\p{L}\p{N}]/u.test(p))out.push({t:p,line});});
     });
     return out;
   }
   function showRead(){readBtn.innerHTML=reading?ICON.pause+' 멈춤':ICON.play+' 재생';}
+  // 읽는 줄이 대본 칸 위쪽에 오도록 따라 올라간다
+  function followLine(i){
+    const el=src.children[i];
+    if(el)src.scrollTo({top:el.offsetTop-src.offsetTop-src.clientHeight*0.3,behavior:'smooth'});
+  }
   function speakNext(my){
     if(my!==turn)return;
     // 끝까지 읽으면 잠깐 쉬고 처음부터 다시 읽는다
     if(idx>=parts.length){idx=0;loopWait=setTimeout(()=>speakNext(my),1000);return;}
-    const u=new SpeechSynthesisUtterance(parts[idx]);
+    followLine(parts[idx].line);
+    const u=new SpeechSynthesisUtterance(parts[idx].t);
     u.lang='ko-KR';
     const v=voices.find(x=>x.voiceURI===voiceSel.value);
     if(v)u.voice=v;
@@ -377,9 +385,10 @@
     reading=false;turn++;clearTimeout(loopWait);tts.cancel();showRead();
   }
   function startRead(){
+    // 입력을 마쳐서 대본 칸의 줄과 읽을 줄 번호를 맞춘다
+    src.blur();
     parts=readParts();
     if(!parts.length){$('stat').textContent='읽을 글이 없어요';return;}
-    src.blur();
     reading=true;turn++;idx=0;tts.cancel();showRead();
     speakNext(turn);
   }
