@@ -12,15 +12,18 @@ body{position:fixed;left:0;right:0;top:0;height:var(--vh,100%);padding:env(safe-
 button{font:inherit;color:inherit;cursor:pointer}
 
 /* 설정 화면 */
-#setup{height:100%;display:flex;flex-direction:column}
+#setup{position:relative;height:100%;display:flex;flex-direction:column}
 #opts{flex:none;width:100%;max-width:640px;margin:0 auto;padding:0 12px calc(6px + env(safe-area-inset-bottom))}
 /* 입력 칸은 재생 화면과 같은 배경·여백·글자 크기로 보여 준다 */
 #src{flex:1 1 0;min-height:0;width:100%;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:#000;color:var(--text);
   border-bottom:1px solid var(--line);padding:44px 20px 8px;line-height:1.3;outline:none;
   white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere;-webkit-user-select:text;user-select:text}
-/* 안내 문구는 진짜 글자가 아니라 그림처럼 얹은 것이다. 입력 칸을 탭하면 사라지고, 대본에도 글자 수에도 들어가지 않는다 */
-#src.empty::before{content:attr(data-placeholder);color:var(--dim);font-size:17px;line-height:1.5;pointer-events:none}
-#src.empty:focus::before{content:none}
+/* 안내 문구: 입력 칸이 비어 있을 때만 위에 얹고, 입력 칸을 탭하면 사라진다 */
+#hint{display:none;position:absolute;left:0;right:0;top:0;padding:44px 20px 0;font-size:17px;line-height:1.5;color:var(--dim);pointer-events:none}
+#src.empty:not(:focus)+#hint{display:block}
+#hint b,#hint u{color:var(--text)}
+#hint .y{color:var(--yellow)}
+#hint .r{color:var(--red)}
 .row{display:flex;gap:8px;margin-top:8px;align-items:center}
 .card{margin-top:8px}
 .slider{font-size:15px;display:flex;align-items:center;gap:8px;padding:0 0 9px}

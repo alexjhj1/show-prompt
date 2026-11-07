@@ -17,7 +17,9 @@
 
 <section id="setup">
   <!-- 볼드체를 지키려고 textarea 대신 서식이 남는 입력 칸을 쓴다 -->
-  <div id="src" class="empty" contenteditable="true" data-placeholder="메모장에 있는 대본을 붙여넣으세요&#10;아이폰 메모장 기본 글씨 크기는 17입니다&#10;&#10;볼드체 = 잽 (노란색)&#10;밑줄 = 펀치 (빨간색)" role="textbox" aria-multiline="true" aria-label="대본"></div>
+  <div id="src" class="empty" contenteditable="true" role="textbox" aria-multiline="true" aria-label="대본"></div>
+  <!-- 입력 칸 위에 얹은 안내. 진짜 글자가 아니라서 대본과 글자 수에 들어가지 않는다 -->
+  <div id="hint" aria-hidden="true">메모장에 있는 대본을 붙여넣으세요<br>아이폰 메모장 기본 글씨 크기는 17입니다<br><br><b>볼드체</b> = <b class="y">잽</b><br><u>밑줄</u> = <span class="r">펀치</span></div>
   <div id="opts">
   <div class="row">
     <button class="btn key" id="pasteBtn" type="button">붙여넣기</button>
