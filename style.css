@@ -74,6 +74,10 @@ button{font:inherit;color:inherit;cursor:pointer}
 #hud .btn{height:68px;padding:0;display:flex;align-items:center;justify-content:center}
 #backBtn{flex:0 0 56px;font-size:20px;color:var(--dim)}
 #hud .big{flex:1;font-size:34px;font-weight:600}
+/* 대본 끝에 닿으면 아래 메뉴 바로 위 오른쪽에 나타나는 맨 위로 버튼 */
+#topBtn{display:none;position:absolute;right:16px;bottom:calc(104px + env(safe-area-inset-bottom));width:56px;height:56px;padding:0;
+  border-radius:50%;font-size:26px;line-height:1;align-items:center;justify-content:center;z-index:6}
+#topBtn.show{display:flex}
 #toast{position:absolute;left:50%;bottom:calc(112px + env(safe-area-inset-bottom));transform:translateX(-50%);
   background:rgba(20,20,22,.92);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:16px;
   opacity:0;transition:opacity .25s;pointer-events:none}

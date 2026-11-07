@@ -2,7 +2,7 @@
 (function(){
   const $ = id => document.getElementById(id);
   const src=$('src'), speedEl=$('speed'), speedV=$('speedV'), size=$('size'), sizeV=$('sizeV');
-  const stage=$('stage'), scroller=$('scroller'), playBtn=$('playBtn'), toast=$('toast');
+  const stage=$('stage'), scroller=$('scroller'), playBtn=$('playBtn'), toast=$('toast'), topBtn=$('topBtn');
   const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   // ---- 입력 칸 내용 → 줄 목록 (각 줄은 글자 조각과 볼드·밑줄 여부) ----
@@ -291,7 +291,11 @@
     y=Math.min(y,distance);
     apply();
   }
-  function apply(){scroller.style.transform=`translateY(${-y}px)`;}
+  function apply(){
+    scroller.style.transform=`translateY(${-y}px)`;
+    // 대본 끝에 닿아 있을 때만 맨 위로 버튼을 보여 준다
+    topBtn.classList.toggle('show',y>=distance-1);
+  }
   function tick(ts){
     if(!playing)return;
     // 다른 앱에 다녀와도 대본이 튀지 않게 한 번에 움직이는 시간을 제한한다
@@ -412,6 +416,9 @@
   }else $('readRow').style.display='none';
 
   function close(){pause();stage.classList.remove('on');}
+  // 맨 위로 버튼: 처음 위치로 돌아가서 멈춰 있고, 재생 버튼을 누르면 시작한다
+  topBtn.addEventListener('click',e=>{e.stopPropagation();pause();y=0;apply();});
+  topBtn.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();topBtn.click();},{passive:false});
   const hud=$('hud');
   [['backBtn',close],['slowBtn',()=>changeSpeed(-1)],['playBtn',toggle],['fastBtn',()=>changeSpeed(1)]].forEach(([id,fn])=>{
     $(id).addEventListener('click',e=>{e.stopPropagation();fn();});
