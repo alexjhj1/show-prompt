@@ -562,13 +562,17 @@
   }
   async function camOn(){
     try{
-      camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1080},height:{ideal:1920}},audio:true});
+      // 아이폰은 카메라 해상도를 가로 기준(1920×1080)으로 받아서 지금 기기 방향에 맞춰 돌려준다
+      // 세로(1080×1920)로 달라고 하면 가로 영상을 잘라 와서 확대된 것처럼 보였다
+      camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1920},height:{ideal:1080}},audio:true});
     }catch(e){say('카메라를 켤 수 없어요',2500);return;}
     cam.srcObject=camStream;cam.play().catch(()=>{});
     stage.classList.add('camera');
     // 처음부터 녹화할 수 있게 맨 위에서 멈춰 둔다
     pause();y=0;apply();
-    say('재생을 누르면 녹화가 시작돼요',2500);
+    // 실제로 받은 카메라 크기를 잠깐 보여 준다 (세로로 서 있는지 확인용)
+    const st=camStream.getVideoTracks()[0].getSettings();
+    say(`카메라 ${st.width||'?'}×${st.height||'?'} · 재생을 누르면 녹화돼요`,3500);
   }
   function camOff(){
     stopRec();
