@@ -564,7 +564,11 @@
     try{
       // 아이폰은 카메라 해상도를 가로 기준(1920×1080)으로 받아서 지금 기기 방향에 맞춰 돌려준다
       // 세로(1080×1920)로 달라고 하면 가로 영상을 잘라 와서 확대된 것처럼 보였다
-      camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1920},height:{ideal:1080}},audio:true});
+      camStream=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:'user',width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}},
+        // 통화용 처리(울림 제거·잡음 제거·자동 볼륨)를 끄면 목소리가 먹먹하지 않고 원래 소리에 가깝다
+        audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:{ideal:2},sampleRate:{ideal:48000},sampleSize:{ideal:24}}
+      });
     }catch(e){say('카메라를 켤 수 없어요',2500);return;}
     cam.srcObject=camStream;cam.play().catch(()=>{});
     stage.classList.add('camera');
@@ -572,7 +576,8 @@
     pause();y=0;apply();
     // 실제로 받은 카메라 크기를 잠깐 보여 준다 (세로로 서 있는지 확인용)
     const st=camStream.getVideoTracks()[0].getSettings();
-    say(`카메라 ${st.width||'?'}×${st.height||'?'} · 재생을 누르면 녹화돼요`,3500);
+    const au=(camStream.getAudioTracks()[0]||{getSettings:()=>({})}).getSettings();
+    say(`카메라 ${st.width||'?'}×${st.height||'?'} · 소리 ${au.sampleRate?Math.round(au.sampleRate/1000)+'kHz':''} ${au.channelCount===2?'스테레오':'모노'} · 재생하면 녹화`,4000);
   }
   function camOff(){
     stopRec();
@@ -582,7 +587,10 @@
   function startRec(){
     if(!camStream||rec||!window.MediaRecorder)return;
     const type=['video/mp4','video/webm'].find(t=>MediaRecorder.isTypeSupported(t))||'';
-    try{rec=new MediaRecorder(camStream,type?{mimeType:type}:undefined);}catch(e){say('녹화를 시작할 수 없어요',2500);return;}
+    // 화질 10Mbps, 음질 256kbps로 높게 녹화한다. 기기가 못 받으면 기본값으로 다시 시도한다
+    const hi=Object.assign(type?{mimeType:type}:{},{videoBitsPerSecond:10000000,audioBitsPerSecond:256000});
+    try{rec=new MediaRecorder(camStream,hi);}
+    catch(e){try{rec=new MediaRecorder(camStream,type?{mimeType:type}:undefined);}catch(e2){say('녹화를 시작할 수 없어요',2500);return;}}
     chunks=[];
     rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
     rec.onstop=()=>{
