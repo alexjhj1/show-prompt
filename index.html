@@ -57,12 +57,16 @@
 </section>
 
 <section id="stage">
+  <!-- 촬영 모드: 앞 카메라 화면을 대본 뒤에 깐다 -->
+  <video id="cam" playsinline muted autoplay></video>
   <div id="scroller"></div>
   <div id="fadeT"></div><div id="fadeB"></div>
   <div id="toast"></div>
+  <button class="btn key" id="saveBtn" type="button" hidden>영상 저장</button>
   <button class="btn key" id="topBtn" type="button" aria-label="맨 위로"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 4 13.5h5v6h6v-6h5z"/></svg></button>
   <div id="hud">
     <button class="btn key" id="backBtn" aria-label="닫기">✕</button>
+    <button class="btn key" id="camBtn" aria-label="촬영 모드"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l1.6-2h6.8L17 7h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1zm8 2.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg></button>
     <button class="btn key big" id="slowBtn" aria-label="느리게">−</button>
     <button class="btn key big" id="playBtn" aria-label="재생 또는 일시정지"></button>
     <button class="btn key big" id="fastBtn" aria-label="빠르게">+</button>

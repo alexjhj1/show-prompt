@@ -308,9 +308,10 @@
   function play(){
     if(y>=distance)y=0;
     playing=true;showIcon('pause');last=performance.now();
+    startRec(); // 촬영 모드이면 재생과 함께 녹화를 시작한다
     cancelAnimationFrame(raf);raf=requestAnimationFrame(tick);
   }
-  function pause(){playing=false;showIcon('play');cancelAnimationFrame(raf);}
+  function pause(){playing=false;showIcon('play');cancelAnimationFrame(raf);stopRec();}
   function toggle(){playing?pause():play();}
   function changeSpeed(d){
     step(speedEl,d,1,10);
@@ -532,7 +533,68 @@
     if(!busy){clearTimeout(loopWait);turn++;speakNext(turn);}
   });
 
-  function close(){pause();stage.classList.remove('on');}
+  // ---- 촬영 모드: 재생을 누르면 녹화 시작, 멈추면 녹화 끝 ----
+  const cam=$('cam'), camBtn=$('camBtn'), saveBtn=$('saveBtn');
+  let camStream=null, rec=null, chunks=[], video=null, saved=true;
+  function say(msg,ms){
+    toast.textContent=msg;toast.classList.add('show');
+    clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),ms||1500);
+  }
+  async function camOn(){
+    try{
+      camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1080},height:{ideal:1920}},audio:true});
+    }catch(e){say('카메라를 켤 수 없어요',2500);return;}
+    cam.srcObject=camStream;cam.play().catch(()=>{});
+    stage.classList.add('camera');
+    // 처음부터 녹화할 수 있게 맨 위에서 멈춰 둔다
+    pause();y=0;apply();
+    say('재생을 누르면 녹화가 시작돼요',2500);
+  }
+  function camOff(){
+    stopRec();
+    if(camStream)camStream.getTracks().forEach(t=>t.stop());
+    camStream=null;cam.srcObject=null;stage.classList.remove('camera');
+  }
+  function startRec(){
+    if(!camStream||rec||!window.MediaRecorder)return;
+    const type=['video/mp4','video/webm'].find(t=>MediaRecorder.isTypeSupported(t))||'';
+    try{rec=new MediaRecorder(camStream,type?{mimeType:type}:undefined);}catch(e){say('녹화를 시작할 수 없어요',2500);return;}
+    chunks=[];
+    rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
+    rec.onstop=()=>{
+      const t=(rec&&rec.mimeType)||type||'video/mp4', d=new Date();
+      const name='show-prompt-'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'-'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+(t.includes('webm')?'.webm':'.mp4');
+      video=new File(chunks,name,{type:t.split(';')[0]});
+      rec=null;saved=false;stage.classList.remove('rec');saveBtn.hidden=false;
+    };
+    rec.start(1000);
+    stage.classList.add('rec');saveBtn.hidden=true;
+  }
+  function stopRec(){if(rec&&rec.state!=='inactive')rec.stop();}
+  // 아이폰에서는 공유 창에서 '비디오 저장'을 고르면 사진 앱에 들어간다
+  async function saveVideo(){
+    if(!video)return;
+    try{
+      if(navigator.canShare&&navigator.canShare({files:[video]})){await navigator.share({files:[video]});}
+      else{
+        const a=document.createElement('a');a.href=URL.createObjectURL(video);a.download=video.name;
+        document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+      }
+      saved=true;saveBtn.hidden=true;
+    }catch(e){/* 공유 창을 닫으면 그대로 둔다 */}
+  }
+  camBtn.addEventListener('click',()=>{camStream?camOff():camOn();});
+  saveBtn.addEventListener('click',e=>{e.stopPropagation();saveVideo();});
+  saveBtn.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();saveBtn.click();},{passive:false});
+
+  let closeWarned=false;
+  function close(){
+    pause();
+    // 저장 안 한 영상이 있으면 한 번은 막고 알려 준다
+    if(video&&!saved&&!closeWarned){closeWarned=true;say('저장 안 한 영상이 있어요. 한 번 더 누르면 닫혀요',2500);return;}
+    closeWarned=false;camOff();video=null;saved=true;saveBtn.hidden=true;
+    stage.classList.remove('on');
+  }
   // 맨 위로 버튼: 처음 위치로 돌아가서 멈춰 있고, 재생 버튼을 누르면 시작한다
   topBtn.addEventListener('click',e=>{e.stopPropagation();pause();y=0;apply();});
   topBtn.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();topBtn.click();},{passive:false});

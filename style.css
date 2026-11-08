@@ -84,3 +84,16 @@ button{font:inherit;color:inherit;cursor:pointer}
   background:rgba(20,20,22,.92);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:16px;
   opacity:0;transition:opacity .25s;pointer-events:none}
 #toast.show{opacity:1}
+
+/* 촬영 모드: 앞 카메라 화면을 거울처럼 뒤집어 어둡게 깔고, 그 위에 대본을 올린다 */
+#cam{display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);filter:brightness(.5)}
+#stage.camera #cam{display:block}
+#stage.camera #fadeT,#stage.camera #fadeB{display:none}
+#stage.camera .ln{text-shadow:0 1px 3px #000}
+#camBtn{flex:0 0 56px;font-size:24px;color:var(--dim)}
+#stage.camera #camBtn{color:var(--text);border-color:var(--text)}
+/* 녹화 중에는 카메라 버튼이 빨갛게 된다 */
+#stage.rec #camBtn{color:#fff;background:var(--red);border-color:var(--red)}
+#saveBtn{position:absolute;left:16px;bottom:calc(104px + env(safe-area-inset-bottom));height:56px;padding:0 18px;font-size:17px;font-weight:700;
+  --key-floor:#a8862a;background:var(--accent);color:#111;border-color:var(--accent);z-index:6}
+#saveBtn[hidden]{display:none}
