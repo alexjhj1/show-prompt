@@ -1,3 +1,8 @@
 # 맥 외장 디스크가 만드는 숨김 파일은 올리지 않는다
 ._*
 .DS_Store
+
+# 키와 Vercel 연결 정보는 올리지 않는다
+.env*
+.vercel
+.claude

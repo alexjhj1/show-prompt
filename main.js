@@ -330,9 +330,22 @@
     play();
   };
   // ---- 대본 읽어 주기: 멈출 때까지 처음부터 끝까지 반복한다 ----
-  const tts=window.speechSynthesis, readBtn=$('readBtn'), voiceSel=$('voice');
-  const VOICE_KEY='standup-prompter-voice';
+  // 목소리는 Gemini 음성(서버에서 만듦)과 아이폰 기본 음성 중에서 고른다
+  const tts=window.speechSynthesis, readBtn=$('readBtn'), voiceSel=$('voice'), styleSel=$('style'), fetchBtn=$('fetchBtn');
+  const VOICE_KEY='standup-prompter-voice', STYLE_KEY='show-prompt-style';
+  // Gemini 목소리: 이름과 느낌
+  const GEMINI=[['Charon','차분한 설명'],['Zephyr','밝음'],['Algenib','거칠고 낮음'],['Puck','경쾌함'],['Kore','단단함'],
+    ['Fenrir','흥분'],['Leda','젊음'],['Orus','단단함'],['Aoede','산뜻함'],['Callirrhoe','느긋함'],['Autonoe','밝음'],
+    ['Enceladus','숨소리'],['Iapetus','또렷함'],['Umbriel','느긋함'],['Algieba','부드러움'],['Despina','부드러움'],
+    ['Erinome','또렷함'],['Rasalgethi','설명형'],['Laomedeia','경쾌함'],['Achernar','부드러움'],['Alnilam','단단함'],
+    ['Schedar','고른 톤'],['Gacrux','성숙함'],['Pulcherrima','당당함'],['Achird','친근함'],['Zubenelgenubi','편안함'],
+    ['Vindemiatrix','온화함'],['Sadachbia','생기'],['Sadaltager','박식함'],['Sulafat','따뜻함']];
   let voices=[], reading=false, turn=0, idx=0, parts=[], loopWait=0, utter=null;
+  const audio=new Audio(); audio.preload='auto';
+  let audioURL='';
+  const isGemini=()=>voiceSel.value.startsWith('g:');
+  function store(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+  function load(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
   // 고음질 음성을 앞에 두고, 장난스러운 음성은 뒤로 보낸다
   function voiceScore(v){
     const s=(v.voiceURI+' '+v.name).toLowerCase();
@@ -347,14 +360,17 @@
     return v.name+(/premium/.test(s)&&!/premium/i.test(v.name)?' (프리미엄)':/enhanced/.test(s)&&!/enhanced/i.test(v.name)?' (고품질)':'');
   }
   function loadVoices(){
-    voices=tts.getVoices().filter(v=>/^ko/i.test(v.lang)).sort((a,b)=>voiceScore(b)-voiceScore(a));
+    voices=tts?tts.getVoices().filter(v=>/^ko/i.test(v.lang)).sort((a,b)=>voiceScore(b)-voiceScore(a)):[];
     // 이름이 같게 보이는 음성은 좋은 것 하나만 남긴다
     voices=voices.filter((v,i)=>voices.findIndex(x=>voiceName(x)===voiceName(v))===i);
-    let saved='';
-    try{saved=localStorage.getItem(VOICE_KEY)||'';}catch(e){}
-    voiceSel.innerHTML=voices.length?voices.map(v=>`<option value="${esc(v.voiceURI)}">${esc(voiceName(v))}</option>`).join(''):'<option value="">기본 음성</option>';
-    if(voices.some(v=>v.voiceURI===saved))voiceSel.value=saved;
+    const saved=load(VOICE_KEY);
+    voiceSel.innerHTML='<optgroup label="Gemini 음성">'+GEMINI.map(([n,d])=>`<option value="g:${n}">${n} · ${d}</option>`).join('')+'</optgroup>'+
+      (voices.length?'<optgroup label="아이폰 기본 음성">'+voices.map(v=>`<option value="d:${esc(v.voiceURI)}">${esc(voiceName(v))}</option>`).join('')+'</optgroup>':'');
+    // 처음에는 Charon, 그다음부터는 마지막으로 고른 목소리
+    voiceSel.value=[...voiceSel.options].some(o=>o.value===saved)?saved:'g:Charon';
+    syncStyleRow();
   }
+  function syncStyleRow(){$('styleRow').hidden=!isGemini();}
   // 제목, 괄호 안 글, 이모지·기호는 읽지 않는다. 문장마다 나눠서 읽는다
   function readParts(){
     const out=[];
@@ -364,56 +380,157 @@
     });
     return out;
   }
+
+  // ---- 만든 음성 저장소: 같은 목소리·말투·문장은 다시 만들지 않는다 ----
+  let dbP=null;
+  function db(){
+    if(!dbP)dbP=new Promise((ok,no)=>{
+      const r=indexedDB.open('show-prompt-audio',1);
+      r.onupgradeneeded=()=>r.result.createObjectStore('clips');
+      r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);
+    });
+    return dbP;
+  }
+  async function getClip(k){
+    try{const d=await db();return await new Promise(ok=>{const r=d.transaction('clips').objectStore('clips').get(k);r.onsuccess=()=>ok(r.result||null);r.onerror=()=>ok(null);});}
+    catch(e){return null;}
+  }
+  async function putClip(k,blob){
+    try{const d=await db();d.transaction('clips','readwrite').objectStore('clips').put(blob,k);}catch(e){}
+  }
+  const clipKey=t=>voiceSel.value.slice(2)+'|'+styleSel.value+'|'+t;
+  const pending=new Map(); // 같은 문장을 동시에 두 번 요청하지 않게 한다
+  // 문장 음성을 저장소에서 꺼내거나, 없으면 서버에서 받아 저장한다
+  function clip(t){
+    const k=clipKey(t), voice=voiceSel.value.slice(2), style=styleSel.value;
+    if(pending.has(k))return pending.get(k);
+    const p=(async()=>{
+      const have=await getClip(k);
+      if(have)return have;
+      let r;
+      try{r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t,voice,style})});}
+      catch(e){throw new Error('인터넷에 연결되지 않았어요');}
+      if(!r.ok){
+        const m=(await r.json().catch(()=>({}))).error||'음성을 받지 못했어요';
+        throw new Error(m);
+      }
+      const blob=await r.blob();
+      await putClip(k,blob);
+      return blob;
+    })();
+    pending.set(k,p);
+    p.finally(()=>pending.delete(k)).catch(()=>{});
+    return p;
+  }
+  function note(msg){$('stat').textContent=msg;setTimeout(refresh,4000);}
+
+  // ---- 공연 전에 대본 전체 음성을 미리 받아 둔다 ----
+  let fetching=false;
+  async function prefetch(){
+    if(fetching)return;
+    const list=[...new Set(readParts().map(p=>p.t))];
+    if(!list.length){note('읽을 글이 없어요');return;}
+    fetching=true;
+    let done=0, fail=null;
+    const show=()=>{fetchBtn.textContent=`받는 중 ${done}/${list.length}`;};
+    show();
+    let i=0;
+    // 세 문장씩 동시에 받는다
+    async function worker(){
+      while(i<list.length&&!fail){
+        const t=list[i++];
+        try{await clip(t);}catch(e){fail=e;}
+        done++;show();
+      }
+    }
+    await Promise.all([worker(),worker(),worker()]);
+    fetching=false;
+    fetchBtn.textContent=fail?'다시 받기':'받기 완료 ✓';
+    if(fail)note(fail.message);
+    setTimeout(()=>{if(!fetching)fetchBtn.textContent='미리 받기';},4000);
+  }
+
   function showRead(){readBtn.innerHTML=reading?ICON.pause+' 멈춤':ICON.play+' 재생';}
   // 읽는 줄이 대본 칸 위쪽에 오도록 따라 올라간다
   function followLine(i){
     const el=src.children[i];
     if(el)src.scrollTo({top:el.offsetTop-src.offsetTop-src.clientHeight*0.3,behavior:'smooth'});
   }
+  // 아이폰 기본 음성으로 한 문장 읽기
+  function speakDevice(t,my,next){
+    if(!tts){next();return;}
+    const u=new SpeechSynthesisUtterance(t);
+    u.lang='ko-KR';
+    const v=voices.find(x=>'d:'+x.voiceURI===voiceSel.value);
+    if(v)u.voice=v;
+    u.onend=()=>{if(my===turn)next();};
+    u.onerror=e=>{if(my===turn&&e.error!=='canceled'&&e.error!=='interrupted')stopRead();};
+    utter=u; // 아이폰에서 읽는 도중 사라지지 않게 붙잡아 둔다
+    tts.speak(u);
+  }
+  // Gemini 음성으로 한 문장 읽기. 다음 문장은 미리 받아 둔다
+  async function speakGemini(t,my,next){
+    let blob;
+    try{blob=await clip(t);}
+    catch(e){
+      if(my!==turn)return;
+      note(e.message);
+      // 음성을 못 받으면 이 문장만 아이폰 기본 음성으로 읽는다
+      speakDevice(t,my,next);return;
+    }
+    if(my!==turn)return;
+    if(parts[idx+1])clip(parts[idx+1].t).catch(()=>{});
+    if(audioURL)URL.revokeObjectURL(audioURL);
+    audioURL=URL.createObjectURL(blob);
+    audio.src=audioURL;
+    audio.onended=()=>{if(my===turn)next();};
+    audio.play().catch(()=>{if(my===turn)stopRead();});
+  }
   function speakNext(my){
     if(my!==turn)return;
     // 끝까지 읽으면 잠깐 쉬고 처음부터 다시 읽는다
     if(idx>=parts.length){idx=0;loopWait=setTimeout(()=>speakNext(my),1000);return;}
     followLine(parts[idx].line);
-    const u=new SpeechSynthesisUtterance(parts[idx].t);
-    u.lang='ko-KR';
-    const v=voices.find(x=>x.voiceURI===voiceSel.value);
-    if(v)u.voice=v;
-    u.onend=()=>{if(my===turn){idx++;speakNext(my);}};
-    u.onerror=e=>{if(my===turn&&e.error!=='canceled'&&e.error!=='interrupted')stopRead();};
-    utter=u; // 아이폰에서 읽는 도중 사라지지 않게 붙잡아 둔다
-    tts.speak(u);
+    const next=()=>{idx++;speakNext(my);};
+    if(isGemini())speakGemini(parts[idx].t,my,next);else speakDevice(parts[idx].t,my,next);
   }
+  function stopAudio(){if(tts)tts.cancel();audio.onended=null;audio.pause();}
   function stopRead(){
     if(!reading)return;
-    reading=false;turn++;clearTimeout(loopWait);tts.cancel();showRead();
+    reading=false;turn++;clearTimeout(loopWait);stopAudio();showRead();
   }
+  // 아이폰은 버튼을 누른 순간에 소리를 한 번 내야 이후 재생을 허락한다
+  const SILENT='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+  function unlockAudio(){audio.src=SILENT;audio.play().catch(()=>{});}
   function startRead(){
     // 입력을 마쳐서 대본 칸의 줄과 읽을 줄 번호를 맞춘다
     src.blur();
     parts=readParts();
     if(!parts.length){$('stat').textContent='읽을 글이 없어요';return;}
-    reading=true;turn++;idx=0;tts.cancel();showRead();
+    if(isGemini())unlockAudio();
+    reading=true;turn++;idx=0;if(tts)tts.cancel();showRead();
     speakNext(turn);
   }
-  if(tts){
-    loadVoices();
-    tts.addEventListener('voiceschanged',loadVoices);
-    showRead();
-    readBtn.onclick=()=>{reading?stopRead():startRead();};
-    voiceSel.onchange=()=>{
-      try{localStorage.setItem(VOICE_KEY,voiceSel.value);}catch(e){}
-      // 읽는 중에 바꾸면 지금 문장부터 새 목소리로 읽는다
-      if(reading){clearTimeout(loopWait);turn++;tts.cancel();speakNext(turn);}
-    };
-    // 프롬프터를 시작하거나 대본을 지우면 읽기를 멈춘다
-    $('startBtn').addEventListener('click',stopRead);
-    $('clearBtn').addEventListener('click',stopRead);
-    // 다른 앱에 다녀오면서 끊겼으면 이어서 읽는다
-    document.addEventListener('visibilitychange',()=>{
-      if(!document.hidden&&reading&&!tts.speaking){clearTimeout(loopWait);turn++;speakNext(turn);}
-    });
-  }else $('readRow').style.display='none';
+  loadVoices();
+  if(tts)tts.addEventListener('voiceschanged',loadVoices);
+  styleSel.value=load(STYLE_KEY)||'natural';
+  if(!styleSel.value)styleSel.value='natural';
+  showRead();
+  readBtn.onclick=()=>{reading?stopRead():startRead();};
+  fetchBtn.onclick=()=>{src.blur();prefetch();};
+  // 읽는 중에 목소리나 말투를 바꾸면 지금 문장부터 새로 읽는다
+  function restartCurrent(){if(reading){clearTimeout(loopWait);turn++;stopAudio();speakNext(turn);}}
+  voiceSel.onchange=()=>{store(VOICE_KEY,voiceSel.value);syncStyleRow();if(isGemini())unlockAudio();restartCurrent();};
+  styleSel.onchange=()=>{store(STYLE_KEY,styleSel.value);if(isGemini())unlockAudio();restartCurrent();};
+  // 프롬프터를 시작하거나 대본을 지우면 읽기를 멈춘다
+  $('startBtn').addEventListener('click',stopRead);
+  $('clearBtn').addEventListener('click',stopRead);
+  // 다른 앱에 다녀오면서 끊겼으면 이어서 읽는다
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden||!reading)return;
+    const busy=isGemini()?!audio.paused:(tts&&tts.speaking);
+    if(!busy){clearTimeout(loopWait);turn++;speakNext(turn);}
+  });
 
   function close(){pause();stage.classList.remove('on');}
   // 맨 위로 버튼: 처음 위치로 돌아가서 멈춰 있고, 재생 버튼을 누르면 시작한다
