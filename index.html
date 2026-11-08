@@ -34,17 +34,9 @@
       <button class="btn key" id="readBtn" type="button"></button>
       <select id="voice" aria-label="목소리"></select>
     </div>
-    <!-- Gemini 음성일 때만 보이는 말투 고르기와 미리 받기 -->
-    <div class="slider" id="styleRow"><span class="lab">말투</span>
-      <select id="style" aria-label="말투">
-        <option value="natural">자연스럽게</option>
-        <option value="standup">스탠드업처럼</option>
-        <option value="calm">차분하게</option>
-        <option value="hype">신나게</option>
-        <option value="whisper">속삭이듯</option>
-        <option value="fast">빠르게</option>
-      </select>
-      <button class="btn key" id="fetchBtn" type="button">미리 받기</button>
+    <!-- Gemini 음성일 때만 보이는 미리 받기. 말투는 '친구한테 수다 떨듯'으로 정해져 있다 -->
+    <div class="slider" id="styleRow"><span class="lab">받기</span>
+      <button class="btn key" id="fetchBtn" type="button">대본 음성 미리 받기</button>
     </div>
     <div class="slider"><span class="lab">속도</span>
       <button class="btn key step" id="speedDown" type="button" aria-label="느리게">−</button>

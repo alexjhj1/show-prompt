@@ -11,13 +11,9 @@ const VOICES = ['Iapetus','Achernar'];
 
 // 말투: 앱에서 고른 이름을 Gemini에게 주는 지시문으로 바꾼다
 // 말투는 대본 앞에 [한글 지시]로 붙인다. 영어 지시문은 Gemini가 소리 내어 읽어 버리는 일이 있었다
+// 지금은 사용자가 고른 '친구한테 수다 떨듯' 하나만 쓴다. 나중에 말투를 늘릴 때 여기에 더한다
 const STYLES = {
-  natural: '',
-  standup: '스탠드업 코미디언처럼',
-  calm: '차분하고 천천히',
-  hype: '신나게',
-  whisper: '속삭이듯',
-  fast: '빠르게'
+  chat: '친구한테 수다 떨듯'
 };
 
 // 서버가 켜져 있는 동안만 세는 예비 카운터 (Upstash가 없을 때만 쓴다)
@@ -75,7 +71,7 @@ module.exports = async (req, res) => {
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = null; } }
   const text = body && typeof body.text === 'string' ? body.text.trim() : '';
   const voice = VOICES.includes(body && body.voice) ? body.voice : 'Iapetus';
-  const style = (body && STYLES[body.style]) || '';
+  const style = (body && STYLES[body.style]) || STYLES.chat;
   if (!text) return fail(res, 400, '읽을 글이 없어요');
   if (text.length > MAX_CHARS) return fail(res, 413, '문장이 너무 길어요');
 

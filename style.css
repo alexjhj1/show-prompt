@@ -44,7 +44,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 #stat .r{color:var(--red)}
 /* 대본 읽어 주기 */
 #readBtn{flex:1;min-width:0;height:44px;padding:0;font-size:15px;font-weight:600}
-#voice,#style{flex:1;min-width:0;height:44px;padding:0 8px;background:#232328;color:var(--text);border:1px solid var(--line);border-radius:10px;font:inherit;font-size:16px}
+#voice{flex:1;min-width:0;height:44px;padding:0 8px;background:#232328;color:var(--text);border:1px solid var(--line);border-radius:10px;font:inherit;font-size:16px}
 #fetchBtn{flex:1;min-width:0;height:44px;padding:0;font-size:15px;font-weight:600}
 #styleRow[hidden]{display:none}
 .btn.mini{height:44px;padding:0 12px;font-size:14px;flex:none}

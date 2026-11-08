@@ -331,8 +331,9 @@
   };
   // ---- 대본 읽어 주기: 멈출 때까지 처음부터 끝까지 반복한다 ----
   // 목소리는 Gemini 음성(서버에서 만듦)과 아이폰 기본 음성 중에서 고른다
-  const tts=window.speechSynthesis, readBtn=$('readBtn'), voiceSel=$('voice'), styleSel=$('style'), fetchBtn=$('fetchBtn');
-  const VOICE_KEY='standup-prompter-voice', STYLE_KEY='show-prompt-style';
+  const tts=window.speechSynthesis, readBtn=$('readBtn'), voiceSel=$('voice'), fetchBtn=$('fetchBtn');
+  const VOICE_KEY='standup-prompter-voice';
+  const STYLE='chat'; // 말투는 '친구한테 수다 떨듯' 하나로 정해 둔다
   // Gemini 목소리: 이름과 느낌
   const GEMINI=[['Iapetus','또렷한'],['Achernar','여린']];
   let voices=[], reading=false, turn=0, idx=0, parts=[], loopWait=0, utter=null;
@@ -393,11 +394,11 @@
   async function putClip(k,blob){
     try{const d=await db();d.transaction('clips','readwrite').objectStore('clips').put(blob,k);}catch(e){}
   }
-  const clipKey=t=>'v2|'+voiceSel.value.slice(2)+'|'+styleSel.value+'|'+t; // v2: 지시문이 섞였던 옛 음성은 버린다
+  const clipKey=t=>'v2|'+voiceSel.value.slice(2)+'|'+STYLE+'|'+t; // v2: 지시문이 섞였던 옛 음성은 버린다
   const pending=new Map(); // 같은 문장을 동시에 두 번 요청하지 않게 한다
   // 문장 음성을 저장소에서 꺼내거나, 없으면 서버에서 받아 저장한다
   function clip(t){
-    const k=clipKey(t), voice=voiceSel.value.slice(2), style=styleSel.value;
+    const k=clipKey(t), voice=voiceSel.value.slice(2), style=STYLE;
     if(pending.has(k))return pending.get(k);
     const p=(async()=>{
       const have=await getClip(k);
@@ -449,7 +450,7 @@
     fetching=false;
     fetchBtn.textContent=fail?'다시 받기':'받기 완료 ✓';
     if(fail)note(fail.message);
-    setTimeout(()=>{if(!fetching)fetchBtn.textContent='미리 받기';},4000);
+    setTimeout(()=>{if(!fetching)fetchBtn.textContent='대본 음성 미리 받기';},4000);
   }
 
   function showRead(){readBtn.innerHTML=reading?ICON.pause+' 멈춤':ICON.play+' 재생';}
@@ -515,15 +516,12 @@
   }
   loadVoices();
   if(tts)tts.addEventListener('voiceschanged',loadVoices);
-  styleSel.value=load(STYLE_KEY)||'natural';
-  if(!styleSel.value)styleSel.value='natural';
   showRead();
   readBtn.onclick=()=>{reading?stopRead():startRead();};
   fetchBtn.onclick=()=>{src.blur();prefetch();};
-  // 읽는 중에 목소리나 말투를 바꾸면 지금 문장부터 새로 읽는다
+  // 읽는 중에 목소리를 바꾸면 지금 문장부터 새로 읽는다
   function restartCurrent(){if(reading){clearTimeout(loopWait);turn++;stopAudio();speakNext(turn);}}
   voiceSel.onchange=()=>{store(VOICE_KEY,voiceSel.value);syncStyleRow();if(isGemini())unlockAudio();restartCurrent();};
-  styleSel.onchange=()=>{store(STYLE_KEY,styleSel.value);if(isGemini())unlockAudio();restartCurrent();};
   // 프롬프터를 시작하거나 대본을 지우면 읽기를 멈춘다
   $('startBtn').addEventListener('click',stopRead);
   $('clearBtn').addEventListener('click',stopRead);
