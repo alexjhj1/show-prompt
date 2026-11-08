@@ -334,12 +334,7 @@
   const tts=window.speechSynthesis, readBtn=$('readBtn'), voiceSel=$('voice'), styleSel=$('style'), fetchBtn=$('fetchBtn');
   const VOICE_KEY='standup-prompter-voice', STYLE_KEY='show-prompt-style';
   // Gemini 목소리: 이름과 느낌
-  const GEMINI=[['Charon','차분한 설명'],['Zephyr','밝음'],['Algenib','거칠고 낮음'],['Puck','경쾌함'],['Kore','단단함'],
-    ['Fenrir','흥분'],['Leda','젊음'],['Orus','단단함'],['Aoede','산뜻함'],['Callirrhoe','느긋함'],['Autonoe','밝음'],
-    ['Enceladus','숨소리'],['Iapetus','또렷함'],['Umbriel','느긋함'],['Algieba','부드러움'],['Despina','부드러움'],
-    ['Erinome','또렷함'],['Rasalgethi','설명형'],['Laomedeia','경쾌함'],['Achernar','부드러움'],['Alnilam','단단함'],
-    ['Schedar','고른 톤'],['Gacrux','성숙함'],['Pulcherrima','당당함'],['Achird','친근함'],['Zubenelgenubi','편안함'],
-    ['Vindemiatrix','온화함'],['Sadachbia','생기'],['Sadaltager','박식함'],['Sulafat','따뜻함']];
+  const GEMINI=[['Iapetus','또렷한'],['Achernar','여린']];
   let voices=[], reading=false, turn=0, idx=0, parts=[], loopWait=0, utter=null;
   const audio=new Audio(); audio.preload='auto';
   let audioURL='';
@@ -366,8 +361,8 @@
     const saved=load(VOICE_KEY);
     voiceSel.innerHTML='<optgroup label="Gemini 음성">'+GEMINI.map(([n,d])=>`<option value="g:${n}">${n} · ${d}</option>`).join('')+'</optgroup>'+
       (voices.length?'<optgroup label="아이폰 기본 음성">'+voices.map(v=>`<option value="d:${esc(v.voiceURI)}">${esc(voiceName(v))}</option>`).join('')+'</optgroup>':'');
-    // 처음에는 Charon, 그다음부터는 마지막으로 고른 목소리
-    voiceSel.value=[...voiceSel.options].some(o=>o.value===saved)?saved:'g:Charon';
+    // 처음에는 Iapetus, 그다음부터는 마지막으로 고른 목소리
+    voiceSel.value=[...voiceSel.options].some(o=>o.value===saved)?saved:'g:Iapetus';
     syncStyleRow();
   }
   function syncStyleRow(){$('styleRow').hidden=!isGemini();}
@@ -398,7 +393,7 @@
   async function putClip(k,blob){
     try{const d=await db();d.transaction('clips','readwrite').objectStore('clips').put(blob,k);}catch(e){}
   }
-  const clipKey=t=>voiceSel.value.slice(2)+'|'+styleSel.value+'|'+t;
+  const clipKey=t=>'v2|'+voiceSel.value.slice(2)+'|'+styleSel.value+'|'+t; // v2: 지시문이 섞였던 옛 음성은 버린다
   const pending=new Map(); // 같은 문장을 동시에 두 번 요청하지 않게 한다
   // 문장 음성을 저장소에서 꺼내거나, 없으면 서버에서 받아 저장한다
   function clip(t){
@@ -412,7 +407,7 @@
       catch(e){throw new Error('인터넷에 연결되지 않았어요');}
       if(!r.ok){
         const m=(await r.json().catch(()=>({}))).error||'음성을 받지 못했어요';
-        throw new Error(m);
+        const err=new Error(m);err.busy=r.status===503;throw err;
       }
       const blob=await r.blob();
       await putClip(k,blob);
@@ -439,7 +434,14 @@
     async function worker(){
       while(i<list.length&&!fail){
         const t=list[i++];
-        try{await clip(t);}catch(e){fail=e;}
+        // Gemini가 잠깐 막으면 20초 기다렸다가 다시 받는다 (최대 6번)
+        for(let a=0;;a++){
+          try{await clip(t);break;}
+          catch(e){
+            if(e.busy&&a<6&&!fail){fetchBtn.textContent=`잠시 대기 ${done}/${list.length}`;await new Promise(r=>setTimeout(r,20000));show();continue;}
+            fail=e;break;
+          }
+        }
         done++;show();
       }
     }

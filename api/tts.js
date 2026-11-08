@@ -7,18 +7,17 @@ const DAILY_LIMIT = Number(process.env.TTS_DAILY_LIMIT || 400); // 하루에 만
 const MAX_CHARS = 300; // 한 번에 읽을 수 있는 글자 수
 
 // 고를 수 있는 목소리 (앱 설정과 같은 목록)
-const VOICES = ['Charon','Zephyr','Algenib','Puck','Kore','Fenrir','Leda','Orus','Aoede','Callirrhoe','Autonoe',
-  'Enceladus','Iapetus','Umbriel','Algieba','Despina','Erinome','Rasalgethi','Laomedeia','Achernar','Alnilam',
-  'Schedar','Gacrux','Pulcherrima','Achird','Zubenelgenubi','Vindemiatrix','Sadachbia','Sadaltager','Sulafat'];
+const VOICES = ['Iapetus','Achernar'];
 
 // 말투: 앱에서 고른 이름을 Gemini에게 주는 지시문으로 바꾼다
+// 말투는 대본 앞에 [한글 지시]로 붙인다. 영어 지시문은 Gemini가 소리 내어 읽어 버리는 일이 있었다
 const STYLES = {
-  natural: 'naturally, like a person talking',
-  standup: 'like a stand-up comedian performing live: confident, punchy, with natural comic timing',
-  calm: 'calmly and slowly, in a relaxed tone',
-  hype: 'with high energy and excitement',
-  whisper: 'in a soft whisper',
-  fast: 'quickly but clearly'
+  natural: '',
+  standup: '스탠드업 코미디언처럼',
+  calm: '차분하고 천천히',
+  hype: '신나게',
+  whisper: '속삭이듯',
+  fast: '빠르게'
 };
 
 // 서버가 켜져 있는 동안만 세는 예비 카운터 (Upstash가 없을 때만 쓴다)
@@ -75,8 +74,8 @@ module.exports = async (req, res) => {
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = null; } }
   const text = body && typeof body.text === 'string' ? body.text.trim() : '';
-  const voice = VOICES.includes(body && body.voice) ? body.voice : 'Charon';
-  const style = STYLES[body && body.style] || STYLES.natural;
+  const voice = VOICES.includes(body && body.voice) ? body.voice : 'Iapetus';
+  const style = (body && STYLES[body.style]) || '';
   if (!text) return fail(res, 400, '읽을 글이 없어요');
   if (text.length > MAX_CHARS) return fail(res, 413, '문장이 너무 길어요');
 
@@ -86,7 +85,7 @@ module.exports = async (req, res) => {
   if (used > DAILY_LIMIT) return fail(res, 429, '오늘 음성 사용량을 다 썼어요');
 
   // 4. Gemini에게 음성 만들기 요청
-  const prompt = `Read the following Korean text aloud ${style}. Read it exactly as written, without adding or skipping words:\n${text}`;
+  const prompt = style ? `[${style}] ${text}` : text;
   let part = null, quota = false;
   for (const model of MODELS) {
     let r;
@@ -111,7 +110,8 @@ module.exports = async (req, res) => {
     if (r.status === 404) continue; // 없어진 모델은 건너뛴다
     break;
   }
-  if (!part) return quota ? fail(res, 429, 'Gemini 사용량을 다 썼어요') : fail(res, 502, '음성을 만들지 못했어요');
+  // Gemini가 잠깐 막은 것은 503으로 알려서 앱이 기다렸다가 다시 받게 한다
+  if (!part) return quota ? fail(res, 503, 'Gemini가 바빠요. 잠시 후 다시 받아요') : fail(res, 502, '음성을 만들지 못했어요');
 
   const wav = toWav(Buffer.from(part.inlineData.data, 'base64'));
   res.statusCode = 200;
