@@ -1,8 +1,7 @@
 // Show Prompt 음성 서버: 문장 하나를 Gemini TTS로 읽어 wav로 돌려준다
 // 키는 이 서버 안에서만 쓰고 브라우저로 보내지 않는다
-// 앞 모델의 사용량이 다 차면 다음 모델로 넘어간다 (무료 사용량은 모델마다 따로 센다)
-const MODELS = (process.env.GEMINI_TTS_MODELS ||
-  'gemini-3.8-flash-tts,gemini-3.1-flash-tts-preview,gemini-2.5-flash-preview-tts,gemini-3.8-flash-lite-tts').split(',');
+// 음성 모델은 하나로 고정한다. 다른 모델로 넘어가면 목소리가 달라지고 호출도 늘어난다
+const MODEL = 'gemini-3.8-flash-tts';
 const DAILY_LIMIT = Number(process.env.TTS_DAILY_LIMIT || 400); // 하루에 만들 수 있는 문장 수
 const MAX_CHARS = 300; // 한 번에 읽을 수 있는 글자 수
 
@@ -53,10 +52,23 @@ function toWav(buf) {
   return Buffer.concat([h, buf]);
 }
 
-function fail(res, code, msg) {
+function fail(res, code, msg, extra) {
   res.statusCode = code;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.end(JSON.stringify({ error: msg }));
+  if (extra && extra.retryAfter) res.setHeader('Retry-After', String(extra.retryAfter));
+  res.end(JSON.stringify(Object.assign({ error: msg }, extra || {})));
+}
+
+// Gemini의 429 응답에서 몇 초 뒤에 다시 보내라는지, 하루 한도인지 읽는다
+function readLimit(d) {
+  const details = (d && d.error && d.error.details) || [];
+  let retryAfter = 60, daily = false;
+  for (const x of details) {
+    if (x.retryDelay) retryAfter = Math.ceil(parseFloat(x.retryDelay)) || retryAfter;
+    for (const v of x.violations || []) if (/PerDay|per_day/i.test(v.quotaId || '')) daily = true;
+  }
+  if (/per day|per_day/i.test((d && d.error && d.error.message) || '')) daily = true;
+  return { retryAfter, daily };
 }
 
 module.exports = async (req, res) => {
@@ -78,36 +90,33 @@ module.exports = async (req, res) => {
   // 3. 하루 사용량 제한
   let used;
   try { used = await countToday(); } catch (e) { return fail(res, 503, '사용량을 확인하지 못했어요'); }
-  if (used > DAILY_LIMIT) return fail(res, 429, '오늘 음성 사용량을 다 썼어요');
+  if (used > DAILY_LIMIT) return fail(res, 429, '오늘 음성 사용량을 다 썼어요', { daily: true });
 
   // 4. Gemini에게 음성 만들기 요청
   const prompt = style ? `[${style}] ${text}` : text;
-  let part = null, quota = false;
-  for (const model of MODELS) {
-    let r;
-    try {
-      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.trim()}:generateContent`, {
-        method: 'POST',
-        headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } }
-          }
-        })
-      });
-    } catch (e) { return fail(res, 502, '음성 서버에 연결하지 못했어요'); }
-    const d = await r.json().catch(() => ({}));
-    if (r.status === 429) { quota = true; continue; }
-    const c = d.candidates && d.candidates[0];
-    part = c && c.content && c.content.parts && c.content.parts.find(p => p.inlineData);
-    if (part) break;
-    if (r.status === 404) continue; // 없어진 모델은 건너뛴다
-    break;
+  // 한 요청에 Gemini 호출은 딱 한 번만 한다. 다시 보내는 것은 앱이 기다렸다가 한다
+  let r;
+  try {
+    r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+      method: 'POST',
+      headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } }
+        }
+      })
+    });
+  } catch (e) { return fail(res, 502, '음성 서버에 연결하지 못했어요'); }
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 429) {
+    const lim = readLimit(d);
+    return fail(res, 429, lim.daily ? 'Gemini 하루 사용량을 다 썼어요' : 'Gemini가 잠시 쉬래요', lim);
   }
-  // Gemini가 잠깐 막은 것은 503으로 알려서 앱이 기다렸다가 다시 받게 한다
-  if (!part) return quota ? fail(res, 503, 'Gemini가 바빠요. 잠시 후 다시 받아요') : fail(res, 502, '음성을 만들지 못했어요');
+  const c = d.candidates && d.candidates[0];
+  const part = c && c.content && c.content.parts && c.content.parts.find(p => p.inlineData);
+  if (!part) return fail(res, 502, '음성을 만들지 못했어요');
 
   const wav = toWav(Buffer.from(part.inlineData.data, 'base64'));
   res.statusCode = 200;

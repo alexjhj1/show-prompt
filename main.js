@@ -397,21 +397,35 @@
   }
   const clipKey=t=>'v2|'+voiceSel.value.slice(2)+'|'+STYLE+'|'+t; // v2: 지시문이 섞였던 옛 음성은 버린다
   const pending=new Map(); // 같은 문장을 동시에 두 번 요청하지 않게 한다
+  const mem=new Map(); // 저장소를 못 쓰는 브라우저에서도 이번에 받은 음성은 다시 받지 않게 한다
+  let blockedUntil=0; // Gemini가 기다리라고 한 시각. 그때까지는 새로 요청하지 않는다
   // 문장 음성을 저장소에서 꺼내거나, 없으면 서버에서 받아 저장한다
-  function clip(t){
+  // onlySaved가 참이면 서버에 묻지 않고 저장된 것만 꺼낸다
+  function clip(t,onlySaved){
     const k=clipKey(t), voice=voiceSel.value.slice(2), style=STYLE;
+    if(mem.has(k))return Promise.resolve(mem.get(k));
     if(pending.has(k))return pending.get(k);
     const p=(async()=>{
       const have=await getClip(k);
-      if(have)return have;
+      if(have){mem.set(k,have);return have;}
+      if(onlySaved)return null;
+      const wait=blockedUntil-Date.now();
+      if(wait>0){const err=new Error(`Gemini가 쉬는 중이에요 (${Math.ceil(wait/1000)}초 남음)`);err.retryAfter=Math.ceil(wait/1000);throw err;}
       let r;
       try{r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t,voice,style})});}
       catch(e){throw new Error('인터넷에 연결되지 않았어요');}
       if(!r.ok){
-        const m=(await r.json().catch(()=>({}))).error||'음성을 받지 못했어요';
-        const err=new Error(m);err.busy=r.status===503;throw err;
+        const d=await r.json().catch(()=>({}));
+        const err=new Error(d.error||'음성을 받지 못했어요');
+        if(r.status===429){
+          // 서버가 알려 준 시간만큼은 아무 문장도 새로 요청하지 않는다
+          err.retryAfter=+d.retryAfter||+r.headers.get('Retry-After')||60;err.daily=!!d.daily;
+          blockedUntil=Math.max(blockedUntil,Date.now()+err.retryAfter*1000);
+        }
+        throw err;
       }
       const blob=await r.blob();
+      mem.set(k,blob);
       await putClip(k,blob);
       return blob;
     })();
@@ -436,11 +450,15 @@
     async function worker(){
       while(i<list.length&&!fail){
         const t=list[i++];
-        // Gemini가 잠깐 막으면 20초 기다렸다가 다시 받는다 (최대 6번)
+        // Gemini가 기다리라고 하면 알려 준 시간만큼 기다렸다가 다시 받는다
+        // 하루 한도이거나 2분보다 오래 기다려야 하면 멈추고 알려 준다
         for(let a=0;;a++){
           try{await clip(t);break;}
           catch(e){
-            if(e.busy&&a<6&&!fail){fetchBtn.textContent=`잠시 대기 ${done}/${list.length}`;await new Promise(r=>setTimeout(r,20000));show();continue;}
+            if(e.retryAfter&&!e.daily&&e.retryAfter<=120&&a<5&&!fail){
+              fetchBtn.textContent=`${e.retryAfter}초 대기 ${done}/${list.length}`;
+              await new Promise(r=>setTimeout(r,(e.retryAfter+1)*1000));show();continue;
+            }
             fail=e;break;
           }
         }
@@ -474,16 +492,18 @@
   }
   // Gemini 음성으로 한 문장 읽기. 다음 문장은 미리 받아 둔다
   async function speakGemini(t,my,next){
-    let blob;
+    let blob=null;
     try{blob=await clip(t);}
     catch(e){
       if(my!==turn)return;
-      note(e.message);
+      // 쉬는 중이라 요청하지 않은 경우는 알림을 되풀이하지 않는다
+      if(!/쉬는 중/.test(e.message))note(e.message);
       // 음성을 못 받으면 이 문장만 아이폰 기본 음성으로 읽는다
       speakDevice(t,my,next);return;
     }
     if(my!==turn)return;
-    if(parts[idx+1])clip(parts[idx+1].t).catch(()=>{});
+    // 다음 문장을 미리 받아 둔다. Gemini가 쉬는 중이면 묻지 않는다
+    if(parts[idx+1]&&Date.now()>=blockedUntil)clip(parts[idx+1].t).catch(()=>{});
     if(audioURL)URL.revokeObjectURL(audioURL);
     audioURL=URL.createObjectURL(blob);
     audio.src=audioURL;
