@@ -566,8 +566,8 @@
       // 세로(1080×1920)로 달라고 하면 가로 영상을 잘라 와서 확대된 것처럼 보였다
       camStream=await navigator.mediaDevices.getUserMedia({
         video:{facingMode:'user',width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}},
-        // 통화용 처리(울림 제거·잡음 제거·자동 볼륨)를 끄면 목소리가 먹먹하지 않고 원래 소리에 가깝다
-        audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:{ideal:2},sampleRate:{ideal:48000},sampleSize:{ideal:24}}
+        // 울림 제거·잡음 제거를 끄면 목소리가 덜 먹먹하다. 자동 볼륨까지 끄면 목소리가 너무 작아져서 자동 볼륨은 켜 둔다
+        audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true,channelCount:{ideal:2},sampleRate:{ideal:48000},sampleSize:{ideal:24}}
       });
     }catch(e){say('카메라를 켤 수 없어요',2500);return;}
     cam.srcObject=camStream;cam.play().catch(()=>{});
