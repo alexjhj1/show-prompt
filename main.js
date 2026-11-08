@@ -435,7 +435,7 @@
     const show=()=>{fetchBtn.textContent=`받는 중 ${done}/${list.length}`;};
     show();
     let i=0;
-    // 세 문장씩 동시에 받는다
+    // 여덟 문장씩 동시에 받는다 (한 문장에 4초쯤 걸려서 동시에 받아야 빠르다)
     async function worker(){
       while(i<list.length&&!fail){
         const t=list[i++];
@@ -443,7 +443,7 @@
         done++;show();
       }
     }
-    await Promise.all([worker(),worker(),worker()]);
+    await Promise.all(Array.from({length:8},worker));
     fetching=false;
     fetchBtn.textContent=fail?'다시 받기':'받기 완료 ✓';
     if(fail)note(fail.message);
