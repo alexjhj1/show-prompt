@@ -1,4 +1,4 @@
-// 스탠드업 프롬프터: 잽·펀치 표시 + 속도 조절 자동 스크롤
+// Show Prompt: 잽·펀치 표시 + 속도 조절 자동 스크롤
 (function(){
   const $ = id => document.getElementById(id);
   const src=$('src'), speedEl=$('speed'), speedV=$('speedV'), size=$('size'), sizeV=$('sizeV');
