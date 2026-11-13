@@ -2,11 +2,16 @@
 :root{
   --bg:#0e0e10; --panel:#18181b; --line:#2a2a2f; --text:#f2f2f2; --dim:#8a8a93;
   --yellow:#ffd54a; --red:#ff3b30; --gray:#6e6e76; --accent:#ffd54a;
+  /* 첫 화면 벤토 디자인 기준: 색은 Vercel colors, 모양은 bento 규칙 */
+  --canvas:#fafafa; --surface:#ffffff; --surface-2:#f2f2f2; --ink:#171717; --body:#4d4d4d; --mute:#8f8f8f;
+  --hairline:#ebebeb; --primary:#171717; --on-primary:#ffffff; --jab-on-light:#ab570a; --punch-on-light:#ee0000;
+  --tile-r:22px; --ctl-r:14px; --tile-gap:12px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{height:var(--vh,100%)}
 html,body{margin:0;overflow:hidden;overscroll-behavior:none;background:var(--bg);color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif}
+  font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+body{background:var(--canvas)}
 /* 화면 전체는 고정하고 대본 칸만 스크롤한다. --vh는 키보드가 올라오면 줄어든다 */
 body{position:fixed;left:0;right:0;top:0;height:var(--vh,100%);padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)}
 button{font:inherit;color:inherit;cursor:pointer}
@@ -31,7 +36,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .val{flex:none;width:34px;text-align:center;font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
 .btn{background:#232328;border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:15px;
   touch-action:manipulation;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
-.btn.step{flex:1;height:44px;padding:0;font-size:28px;font-weight:600;line-height:1}
+.btn.step{flex:1;height:44px;padding:0;font-size:28px;font-weight:500;line-height:1}
 /* 누름 손맛 (바로보카와 같은 방식): 바닥 위에 떠 있다가 누르면 곧바로 내려가고 떼면 곧바로 올라온다 */
 .key{--key-floor:#000;box-shadow:0 4px 0 var(--key-floor);will-change:transform}
 .key.is-down{transform:translateY(3px);box-shadow:0 1px 0 var(--key-floor)}
@@ -39,18 +44,41 @@ button{font:inherit;color:inherit;cursor:pointer}
   padding:10px;width:100%;margin-top:0}
 .stat{font-size:13px;color:var(--dim)}
 /* 글자 수와 펀치라인 수 */
-#stat{font-size:15px;color:var(--text);font-weight:600;white-space:nowrap}
+#stat{font-size:15px;color:var(--text);font-weight:700;white-space:nowrap}
 #stat .y{color:var(--yellow)}
 #stat .r{color:var(--red)}
 /* 대본 읽어 주기 */
-#readBtn{flex:1;min-width:0;height:44px;padding:0;font-size:15px;font-weight:600}
+#readBtn{flex:1;min-width:0;height:44px;padding:0;font-size:15px;font-weight:500}
 #voice{flex:1;min-width:0;height:44px;padding:0 8px;background:#232328;color:var(--text);border:1px solid var(--line);border-radius:10px;font:inherit;font-size:16px}
-#fetchBtn{flex:1;min-width:0;height:44px;padding:0;font-size:15px;font-weight:600}
+#fetchBtn{flex:1;min-width:0;height:44px;padding:0;font-size:15px;font-weight:500}
 #styleRow[hidden]{display:none}
 .btn.mini{height:44px;padding:0 12px;font-size:14px;flex:none}
 #clearBtn,#pasteBtn{flex:none;padding:6px 12px;font-size:14px}
 /* 재생·일시정지 아이콘: 이모티콘으로 바뀌지 않게 그림으로 그린다 */
 .ico{width:1em;height:1em;fill:currentColor;vertical-align:-.12em}
+
+/* ===== 첫 화면 벤토 모양 =====
+   옅은 바탕(canvas) 위에 칸을 12px 간격으로 놓는다. 칸 모서리 22px로 통일.
+   진한 칸은 대본 칸과 시작 버튼 두 개만. 칸 그림자·테두리는 쓰지 않는다. */
+#setup{background:var(--canvas);color:var(--ink);gap:var(--tile-gap);
+  padding:var(--tile-gap) var(--tile-gap) calc(var(--tile-gap) + env(safe-area-inset-bottom))}
+#setup #src{background:var(--ink);color:var(--text);border:0;border-radius:var(--tile-r)}
+#setup #hint{top:var(--tile-gap);left:var(--tile-gap);right:var(--tile-gap);color:var(--mute)}
+#setup #opts{display:flex;flex-direction:column;gap:var(--tile-gap);padding:0}
+#setup .row{margin:0;background:var(--surface);border-radius:var(--tile-r);padding:10px 12px}
+#setup .card{margin:0;background:var(--surface);border-radius:var(--tile-r);padding:12px;display:flex;flex-direction:column;gap:10px}
+#setup .slider{padding:0}
+#setup .lab{color:var(--body);font-weight:500}
+#setup .val{color:var(--ink)}
+/* 칸 안의 버튼: 한 단계 짙은 옅은 회색 판, 모서리는 칸 안쪽에 맞춘 14px. 누름 손맛 바닥은 옅은 선 색 */
+#setup .btn{background:var(--surface-2);color:var(--ink);border:0;border-radius:var(--ctl-r);--key-floor:var(--hairline)}
+#setup #voice{background:var(--surface-2);color:var(--ink);border:0;border-radius:var(--ctl-r)}
+#setup #stat{color:var(--ink)}
+#setup #stat .y{color:var(--jab-on-light)}
+#setup #stat .r{color:var(--punch-on-light)}
+/* 시작 버튼: 진한 칸 하나 */
+#setup .btn.primary{--key-floor:#000;background:var(--primary);color:var(--on-primary);border-radius:var(--tile-r);
+  padding:16px;font-size:17px;font-weight:700}
 
 /* 재생 화면 */
 #stage{position:fixed;left:0;right:0;top:0;height:var(--vh,100%);background:#000;display:none;overflow:hidden;touch-action:none;
@@ -75,7 +103,7 @@ button{font:inherit;color:inherit;cursor:pointer}
   display:flex;gap:10px;align-items:stretch;background:rgba(20,20,22,.92);border-top:1px solid var(--line);z-index:5}
 #hud .btn{height:68px;padding:0;display:flex;align-items:center;justify-content:center}
 #backBtn{flex:0 0 56px;font-size:20px;color:var(--dim)}
-#hud .big{flex:1;font-size:34px;font-weight:600}
+#hud .big{flex:1;font-size:34px;font-weight:700}
 /* 대본 끝에 닿으면 아래 메뉴 바로 위 오른쪽에 나타나는 맨 위로 버튼 */
 #topBtn{display:none;position:absolute;right:16px;bottom:calc(104px + env(safe-area-inset-bottom));width:56px;height:56px;padding:0;
   border-radius:50%;font-size:26px;line-height:1;align-items:center;justify-content:center;z-index:6}
